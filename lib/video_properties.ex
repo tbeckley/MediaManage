@@ -1,6 +1,6 @@
 use FFmpex.Options
 
-defmodule VideoManage do
+defmodule VideoProperties do
   @file_extension ["m4v", "mp4", "mkv", "webm", "avi"]
 
   def video_file?(video_path) do

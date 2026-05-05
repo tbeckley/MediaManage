@@ -1,0 +1,182 @@
+<% alias FormatTools %>
+
+<html>
+<head>
+    <meta name="color-scheme" content="light dark">
+    <meta name="viewport" content="width=device-width">
+
+    <style>
+    body {
+        font-family: sans-serif;
+        font-size: 14px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: auto;   /* dynamic column sizing */
+        padding-right: 12px;  /* keeps action buttons off screen edge */
+    }
+
+    th, td {
+        padding: 8px 12px;
+        overflow: hidden;     /* required for truncation */
+    }
+
+    /* Zebra striping */
+    tr:nth-child(even):not(.table-error) {
+        background: color-mix(in srgb, Canvas 90%, CanvasText);
+    }
+
+    tr:hover:not(.table-error) {
+        background: color-mix(in srgb, Canvas 80%, CanvasText);
+    }
+
+    .table-files .col-main {
+        width: 60%;
+    }
+
+    .table-files .col-auto {
+        width: auto;
+    }
+
+    .table-watched-paths .col-main {
+        width: 60%;   /* or auto if you prefer */
+    }
+
+    .table-watched-paths .col-auto {
+        width: auto;
+    }
+
+    .col-action {
+        width: 48px;
+    }
+
+    /* Truncation */
+    .table-files td:first-child {
+        max-width: 0;      /* allows shrinking */
+        padding-right: 80px;
+    }
+
+    .truncate {
+        overflow: hidden;
+    }
+
+    .truncate span {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+}
+
+
+    /* Error row */
+    .table-error {
+        background: color-mix(in srgb, red 25%, Canvas);
+        color: color-mix(in srgb, CanvasText 90%, red);
+    }
+
+    .table-error:hover {
+        background: color-mix(in srgb, red 35%, Canvas);
+    }
+
+    /* Icons */
+    .icon {
+        width: 32px;
+        height: 32px;
+        fill: color-mix(in srgb, CanvasText 80%, Canvas);
+        cursor: pointer;
+    }
+
+    .icon:hover {
+        fill: color-mix(in srgb, CanvasText 100%, Canvas);
+    }
+
+    .larger-text {
+        font-size: 18px;
+    }
+
+    .smaller-text {
+        font-size: 12px;
+    }
+    </style>
+
+    <svg style="display:none;">
+    <defs>
+        <symbol id="icon-forward" viewBox="0 0 24 24">
+            <path d="M12 4l8 8-8 8-1.41-1.41L16.17 13H4v-2h12.17l-5.58-5.59L12 4z"/>
+        </symbol>
+
+        <symbol id="icon-refresh" viewBox="0 0 24 24">
+            <path d="M17.65 6.35A7.95 7.95 0 0012 4V1L7 6l5 5V7a6 6 0 11-6 6H4a8 8 0 1013.65-6.65z"/>
+        </symbol>
+
+        <symbol id="icon-trash" viewBox="0 0 24 24">
+            <path d="M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+        </symbol>
+    </defs>
+    </svg>
+</head>
+
+<body>
+
+    <!-- FIRST TABLE: WATCHED PATHS -->
+    <h1>Watched Paths</h1>
+
+    <table class="table-watched-paths">
+        <colgroup>
+            <col class="col-main">
+            <col class="col-auto">
+            <col class="col-action">
+        </colgroup>
+
+        <%= for watch_path <- path_data do %>
+        <tr>
+            <td><%= watch_path.path %></td>
+            <td>Last updated: <%= watch_path.modified_ago %></td>
+            <td>
+                <%= if watch_path.refresh_eligible do %>
+                    <button><svg class="icon"><use href="#icon-refresh"/></svg></button>
+                <% end %>
+            </td>
+        </tr>
+        <% end %>
+    </table>
+
+
+    <!-- SECOND TABLE: FILES -->
+    <h1>Files</h1>
+
+    <table class="table-files">
+        <colgroup>
+            <col class="col-main">
+            <col class="col-auto">
+            <col class="col-auto">
+            <col class="col-auto">
+            <col class="col-action">
+        </colgroup>
+
+        <%= for file_path <- file_data do %>
+        <tr <%= if file_path.broken do ~s(class="table-error") end %>>
+            <td>
+                <div class="truncate">
+                    <span class="larger-text"><%= Path.basename(file_path.path) %></span>
+                    <span class="smaller-text"><%= Path.dirname(file_path.path) %></span>
+                </div>
+            </td>
+
+            <td><%= file_path |> Map.get(:video_codec) |> FormatTools.format_codec() %></td>
+            <td><%= file_path |> Map.get(:duration) |> FormatTools.format_duration() %></td>
+            <td><%= file_path |> Map.get(:bps) |> FormatTools.format_bps() %></td>
+
+            <td>
+                <%= if not file_path.broken do %>
+                    <button><svg class="icon"><use href="#icon-forward"/></svg></button>
+                <% end %>
+            </td>
+        </tr>
+        <% end %>
+    </table>
+
+</body>
+</html>

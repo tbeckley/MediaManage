@@ -20,7 +20,7 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-videomanage-*.tar
+MediaManage-*.tar
 
 # Ignore temporarily generated cache files
 out/
