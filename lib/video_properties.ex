@@ -26,25 +26,26 @@ defmodule VideoProperties do
         video_stream = Enum.find(streams, &(&1["codec_type"] == "video"))
         duration = FFprobe.duration(video_path);
 
-        bit_rate = case Map.get(video_stream, "bit_rate") do
-          nil -> nil
-          value when is_bitstring(value) -> String.to_integer(value)
-          value -> value
-        end
-
-        %{:path => video_path,
+        %{
           :broken => broken?(video_path),
           :modified_time => modified_time,
-          :video_codec => Map.get(video_stream, "codec_long_name"),
+          :video_codec => Map.get(video_stream, "codec_name"),
           :duration => duration,
-          :bit_rate => bit_rate,
           :bps => trunc(file_size/duration)
-        }
+        };
       {:error, :invalid_file} ->
-        %{:path => video_path,
+        %{
           :broken => :true,
           :modified_time => modified_time
         }
     end
+  end
+
+  def refresh_cache_path(path, existing_data) do
+    if is_nil(existing_data) or is_nil(path) do
+      raise "Somehow tried to refresh nil data or path"
+    end
+
+    IO.puts("Refreshing: #{path}");
   end
 end

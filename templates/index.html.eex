@@ -114,13 +114,15 @@
         <symbol id="icon-trash" viewBox="0 0 24 24">
             <path d="M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
         </symbol>
+
+        <symbol id="icon-plus" viewBox="0 0 24 24">
+            <path d="M19 11H13V5h-2v6H5v2h6v6h2v-6h6z"/>
+        </symbol>
     </defs>
     </svg>
 </head>
 
 <body>
-
-    <!-- FIRST TABLE: WATCHED PATHS -->
     <h1>Watched Paths</h1>
 
     <table class="table-watched-paths">
@@ -130,21 +132,33 @@
             <col class="col-action">
         </colgroup>
 
-        <%= for watch_path <- path_data do %>
+        <%= for %{ path: path, able_refresh: able_refresh, modified_ago: modified_ago } <- path_data do %>
         <tr>
-            <td><%= watch_path.path %></td>
-            <td>Last updated: <%= watch_path.modified_ago %></td>
+            <td><%= path %></td>
+            <td>Last updated: <%= modified_ago %></td>
             <td>
-                <%= if watch_path.refresh_eligible do %>
-                    <button><svg class="icon"><use href="#icon-refresh"/></svg></button>
+                <%= if able_refresh do %>
+                <form action="/refresh" method="post">
+                    <input type="hidden" name="_method" value="patch">
+                    <input type="hidden" name="path" value="<%= path %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-refresh"/></svg></button>
+                </form>
+
                 <% end %>
             </td>
         </tr>
         <% end %>
+        <tr>
+            <form action="/watchpath" method="post">
+                <td style="height: 90%"> <input type="text" name="path" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                    placeholder="/mnt/...." / style="width: 100%; height: 100%;"> </td>
+                <td> </td>
+                <td><button type="submit"><svg class="icon"><use href="#icon-plus"/></svg></button></td>
+            </form>
+        </tr>
     </table>
 
 
-    <!-- SECOND TABLE: FILES -->
     <h1>Files</h1>
 
     <table class="table-files">
@@ -156,21 +170,21 @@
             <col class="col-action">
         </colgroup>
 
-        <%= for file_path <- file_data do %>
-        <tr <%= if file_path.broken do ~s(class="table-error") end %>>
+        <%= for { file_path, metadata } <- file_data do %>
+        <tr <%= if metadata.broken do ~s(class="table-error") end %>>
             <td>
                 <div class="truncate">
-                    <span class="larger-text"><%= Path.basename(file_path.path) %></span>
-                    <span class="smaller-text"><%= Path.dirname(file_path.path) %></span>
+                    <span class="larger-text"><%= Path.basename(file_path) %></span>
+                    <span class="smaller-text"><%= Path.dirname(file_path) %></span>
                 </div>
             </td>
 
-            <td><%= file_path |> Map.get(:video_codec) |> FormatTools.format_codec() %></td>
-            <td><%= file_path |> Map.get(:duration) |> FormatTools.format_duration() %></td>
-            <td><%= file_path |> Map.get(:bps) |> FormatTools.format_bps() %></td>
+            <td><%= metadata |> Map.get(:video_codec) |> FormatTools.format_codec() %></td>
+            <td><%= metadata |> Map.get(:duration) |> FormatTools.format_duration() %></td>
+            <td><%= metadata |> Map.get(:bps) |> FormatTools.format_bps() %></td>
 
             <td>
-                <%= if not file_path.broken do %>
+                <%= if not metadata.broken do %>
                     <button><svg class="icon"><use href="#icon-forward"/></svg></button>
                 <% end %>
             </td>

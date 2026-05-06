@@ -6,6 +6,10 @@ defmodule TimeAgo do
   @month 30 * @day
   @year 35 * @day
 
+  def ago(nil) do
+    "never"
+  end
+
   def ago(seconds) when seconds < @minute do
     "less than a minute ago"
   end

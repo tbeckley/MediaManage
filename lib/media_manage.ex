@@ -1,9 +1,3 @@
-defmodule MediaManage do
- @moduledoc """
- Placeholder
- """
-end
-
 defmodule MediaManage.Application do
   use Application
 
@@ -22,33 +16,56 @@ end
 defmodule MediaManage.Router do
   use Plug.Router
 
+  plug Plug.Parsers, parsers: [:urlencoded, :multipart]
+  plug Plug.MethodOverride
   plug :match
   plug :dispatch
 
   get "/" do
     data = ServerState.get_state()
 
-    path_data = Enum.map(data, fn p ->
-      case Map.get(p, :last_updated) do
-        nil -> %{ path: p.path,
-          modified_ago: "never",
-          refresh_eligible: :true
-        }
-        cache_last_updated -> cache_age = System.system_time(:second) - cache_last_updated
-        %{
-          path: p.path,
-          modified_ago: TimeAgo.ago(cache_age),
-          refresh_eligible: cache_age > 60 * 60
-        }
+    path_data = data |> Map.to_list() |> Enum.map(fn {path, data} ->
+      dt = case Map.get(data, :last_updated) do
+        nil -> nil
+        time -> System.system_time(:second) - time
       end
-    end);
 
-    file_data = Enum.flat_map(data, &Map.get(&1, :media_files))
+      %{
+        path: path,
+        modified_ago: TimeAgo.ago(dt),
+        able_refresh: is_nil(dt) or dt > 60
+      }
+    end)
 
-    # str_data = inspect(data, [{:limit, :infinity}, {:pretty, :true}]
+    file_data = Map.values(data) |> Enum.flat_map(&Map.get(&1, :media_files))
+
+    #IO.inspect(file_data, [{:limit, :infinity}, {:pretty, :true }])
 
     html = EEx.eval_file("templates/index.html.eex", path_data: path_data, file_data: file_data)
-    send_resp(conn, 200, html)
+    send_resp(conn, :ok, html)
+  end
+
+  post "/watchpath" do
+    %{ params: %{ "path" => path }} = conn
+    ServerState.get_state() |> Map.put_new(path, %{ last_updated: nil, media_files: [] }) |> ServerState.set_state()
+    conn |> put_resp_header("location", "/") |> send_resp(302, "")
+  end
+
+  delete "/watchpath" do
+    %{ params: %{ "path" => path }} = conn
+    ServerState.get_state() |> Map.delete(path) |> ServerState.set_state()
+    conn |> put_resp_header("location", "/") |> send_resp(302, "")
+  end
+
+  patch "/refresh" do
+    %{ params: %{ "path" => path }} = conn
+
+    VideoProperties.refresh_cache_path(path, ServerState.get_state() |> Map.get(path))
+    conn |> put_resp_header("location", "/") |> send_resp(302, "")
+  end
+
+  patch "/recode" do
+    conn |> put_resp_header("location", "/") |> send_resp(302, "")
   end
 
   match _ do

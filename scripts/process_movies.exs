@@ -18,6 +18,6 @@ media_to_process =  Enum.map(base_paths, &"#{&1}/**")
 
 item_count = length(media_to_process)
 IO.puts("Found #{item_count} media items")
-process_stream = media_to_process |> Stream.each(&IO.inspect/1) |> Stream.map(&MediaManage.get_metadata/1)
+metadata = media_to_process |> Stream.each(&IO.inspect/1) |> Stream.map(&MediaManage.get_metadata/1)
 
-output = Enum.to_list(stream)
+metadata = Enum.to_list(stream)

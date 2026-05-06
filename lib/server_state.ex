@@ -16,7 +16,19 @@ defmodule ServerState do
   end
 
   def set_state(new_state) do
+    IO.puts("Updating state");
     Agent.update(__MODULE__, fn _ -> new_state end)
   end
 
+  def get_state_string() do
+    inspect(get_state(), [{:limit, :infinity}, {:pretty, :true}])
+  end
+
+  def debug_to_file() do
+    debug_to_file("out/debug.txt")
+  end
+
+  def debug_to_file(path) do
+    File.write!(path,  get_state_string())
+  end
 end
