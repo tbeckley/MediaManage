@@ -1,4 +1,4 @@
-defmodule TimeAgo do
+defmodule Frontend.TimeAgo do
   @minute 60
   @hour 60 * @minute
   @day 24 * @hour

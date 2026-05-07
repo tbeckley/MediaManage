@@ -5,7 +5,7 @@ defmodule Cache do
       {:error , :enoent} ->
         # TODO - Log correctly
         IO.puts("Couldn't find cache file. Starting fresh.")
-        []
+        {}
       {:error, :eisdir} -> raise "Given cache file path is a directory!"
       {:error, error_type} -> raise "Some other error loading the cache file: #{:file.format_error(error_type)}"
     end

@@ -138,7 +138,7 @@
             <td>Last updated: <%= modified_ago %></td>
             <td>
                 <%= if able_refresh do %>
-                <form action="/refresh" method="post">
+                <form action="/watchpath" method="post">
                     <input type="hidden" name="_method" value="patch">
                     <input type="hidden" name="path" value="<%= path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-refresh"/></svg></button>

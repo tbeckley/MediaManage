@@ -1,6 +1,7 @@
 use FFmpex.Options
 
 defmodule VideoProperties do
+  # List of supported media file extensions. Maybe this should change...
   @file_extension ["m4v", "mp4", "mkv", "webm", "avi"]
 
   def video_file?(video_path) do
@@ -18,7 +19,8 @@ defmodule VideoProperties do
     end
   end
 
-  def get_metadata(video_path) do
+  def get_video_metadata(video_path) do
+    IO.puts("Getting metadtata for #{video_path}")
     {:ok, %{:size => file_size, :mtime => modified_time }} = File.stat(video_path, [{:time, :posix}])
 
     case FFprobe.streams(video_path) do
@@ -41,11 +43,42 @@ defmodule VideoProperties do
     end
   end
 
-  def refresh_cache_path(path, existing_data) do
-    if is_nil(existing_data) or is_nil(path) do
-      raise "Somehow tried to refresh nil data or path"
+  def recode_file(_video_path, _new_encoding, _progress_callback \\ nil) do
+    IO.inspect("Shouldn't be here!")
+    new_metadata = %{}
+    { :ok, new_metadata }
+  end
+
+  defp file_changed?(path, existing_metadata) do
+    modified_time = File.stat!(path, [{:time, :posix}]) |> Map.fetch!(:mtime)
+
+    case get_in(existing_metadata, [path, :modified_time]) do
+      nil -> :true
+      ^modified_time -> :false
+      _other_time -> :true
+    end
+  end
+
+  # If existing_metadata is supplied, only get video metadata for files that
+  def path_metadata_smart(path, existing_metadata \\ %{}) do
+    if !File.dir?(path) do
+      raise "Somehow tried to refresh not a path #{path}!"
     end
 
-    IO.puts("Refreshing: #{path}");
+    media_files = Path.wildcard("#{path}/**") |> Enum.filter(&video_file?/1)
+
+    new_file_list = media_files |> Enum.filter(&(file_changed?(&1, existing_metadata)))
+    IO.puts("New/changed files")
+    IO.puts(FormatTools.format_pretty(new_file_list))
+
+    new_changed_files = new_file_list |> Map.new(&{ &1, get_video_metadata(&1) })
+
+    deleted_files =  Map.keys(existing_metadata) -- media_files
+    IO.puts("Deleted files")
+    IO.puts(FormatTools.format_pretty(deleted_files))
+
+    new_metadata = existing_metadata |> Map.drop(deleted_files) |> Map.merge(new_changed_files)
+
+    { :ok, new_metadata }
   end
 end

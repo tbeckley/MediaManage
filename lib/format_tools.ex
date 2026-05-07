@@ -15,7 +15,7 @@ defmodule FormatTools do
     end
   end
 
-    def format_codec(nil) do "" end
+  def format_codec(nil) do "" end
 
   def format_codec(codec) do
     case codec do
@@ -28,5 +28,9 @@ defmodule FormatTools do
 
   def format_bps(bps) do
     "#{trunc(bps/1000)}kb/s"
+  end
+
+  def format_pretty(val) do
+    inspect(val, [{ :limit, :infinity }, { :pretty, :true }])
   end
 end
