@@ -24,11 +24,11 @@
     }
 
     /* Zebra striping */
-    tr:nth-child(even):not(.table-error) {
+    tr:nth-child(even):not(.table-error):not(.table-running):not(.table-queued) {
         background: color-mix(in srgb, Canvas 90%, CanvasText);
     }
 
-    tr:hover:not(.table-error) {
+    tr:hover:not(.table-error):not(.table-running):not(.table-queued) {
         background: color-mix(in srgb, Canvas 80%, CanvasText);
     }
 
@@ -79,6 +79,24 @@
 
     .table-error:hover {
         background: color-mix(in srgb, red 35%, Canvas);
+    }
+
+    .table-running {
+        background: color-mix(in srgb, limegreen 25%, Canvas);
+        color: color-mix(in srgb, CanvasText 90%, limegreen);
+    }
+
+    .table-running:hover {
+        background: color-mix(in srgb, limegreen 35%, Canvas);
+    }
+
+    .table-queued {
+        background: color-mix(in srgb, gold 25%, Canvas);
+        color: color-mix(in srgb, CanvasText 90%, goldenrod);
+    }
+
+    .table-queued:hover {
+        background: color-mix(in srgb, gold 35%, Canvas);
     }
 
     /* Icons */
@@ -140,21 +158,20 @@
             <col class="col-action">
         </colgroup>
         <%= for job <- job_data.running do %>
-        <tr>
+        <tr class="table-running">
             <td> <%= job.description %></td>
             <td> Running (<%= job.duration  %>), <%= job.progress %>% </td>
-            <!-- TODO: MAKE AN X -->
             <td> <button disabled type="submit"><svg class="icon"><use href="#icon-x"/></svg></button></td>
         </tr>
         <% end %>
         <%= for job <- job_data.queued do %>
-        <tr>
+        <tr class="table-queued">
             <td> <%= job.description %></td>
             <td> Queued </td>
-            <!-- TODO: MAKE AN TRASH CAN -->
             <td> <button disabled type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button></td>>
         </tr>
         <% end %>
+        <!-- TODO: Failed jobs with diagnostics -->
     </table>
 
     <h2>Watched Paths</h2>
@@ -170,13 +187,13 @@
             <td><%= path %></td>
             <td>Last updated: <%= modified_ago %></td>
             <td>
-                <%= if able_refresh do %>
+                <!-- TODO: Remove -->
+                <%= if able_refresh or :true do %>
                 <form action="/watchpath" method="post">
                     <input type="hidden" name="_method" value="patch">
                     <input type="hidden" name="path" value="<%= path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-refresh"/></svg></button>
                 </form>
-
                 <% end %>
             </td>
         </tr>

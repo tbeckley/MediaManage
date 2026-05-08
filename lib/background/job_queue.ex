@@ -95,7 +95,7 @@ defmodule Background.JobQueue do
 
     case Map.get(job_spec, :type) do
       # TODO - Handle successfully completed recode
-      :recode -> IO.puts("Recode successfully finished!")
+      :recode -> StateManager.report_reencoded(job_spec.path, data)
       :metadata -> StateManager.set_path_metadata(job_spec.path, data)
       # These two should never run
       nil -> IO.inspect("Somehow managed to finish a non-existing job?!")
@@ -107,8 +107,6 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :complete, job_id, { :error, error_data }}, state) do
-    IO.inspect("Uh oh! Failed task #{job_id}! (#{inspect(error_data)})")
-
     job_spec = get_in(state, [:running, job_id])
 
     failed_spec = Map.delete(job_spec, :pid) |> Map.merge(%{

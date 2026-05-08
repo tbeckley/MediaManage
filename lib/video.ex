@@ -160,12 +160,12 @@ defmodule Video do
         new_video_path = Path.rootname(video_path) <> output_suffix
 
         # Delete the old file
-        # File.rm!(video_path)
-        # File.rename!(output_file_path, new_video_path)
+        File.rm!(video_path)
+        File.rename!(output_file_path, new_video_path)
 
         { :ok, %{ new_video_path => new_metadata } }
       { :error, reason } ->
-        # File.rm!(output_file_path)
+        File.rm!(output_file_path)
         { :error, reason }
     end
   end
@@ -223,7 +223,7 @@ defmodule Video do
     #IO.puts("Deleted files")
     #IO.puts(FormatTools.format_pretty(deleted_files))
 
-    new_metadata = existing_metadata |> Map.delete(deleted_files) |> Map.merge(new_changed_files)
+    new_metadata = existing_metadata |> Map.drop(deleted_files) |> Map.merge(new_changed_files)
 
     { :ok, new_metadata }
   end

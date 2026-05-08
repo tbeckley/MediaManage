@@ -52,6 +52,7 @@ defmodule MediaManage.Router do
   end
 
   post "/watchpath" do
+    # TODO - Make sure it's not a subpath or superpath of an existing path...
     %{ params: %{ "path" => path }} = conn
     StateManager.add_watch_path(path)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
@@ -74,7 +75,8 @@ defmodule MediaManage.Router do
     %{ params: %{ "path" => path }} = conn
 
     # TODO - Get these from frontend somehow, or state at least
-    encode_opts = { :hevc, "medium", 24 }
+    # TODO - Change
+    encode_opts = { :hevc, "faster", 24 }
 
     Background.JobQueue.queue_recode_file(path, encode_opts)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
