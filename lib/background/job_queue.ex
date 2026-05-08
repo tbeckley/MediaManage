@@ -1,14 +1,16 @@
 defmodule Background.JobQueue do
   use GenServer
 
-  # Public API
 
+
+  # Public API
   def start_link(_options) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
-  def queue_recode_file(file_path) do
-    GenServer.cast(__MODULE__, {:enqueue, %{type: :recode, path: file_path}})
+  def queue_recode_file(file_path, encode_opts) do
+    GenServer.cast(__MODULE__, {:enqueue, %{type: :recode,
+      path: file_path, encode_opts: encode_opts}})
   end
 
   def queue_metadata_update(dir_path) do
@@ -19,16 +21,28 @@ defmodule Background.JobQueue do
     GenServer.cast(__MODULE__, :clear_queue)
   end
 
+  def clear_failed() do
+    GenServer.cast(__MODULE__, :clear_failed)
+  end
+
   def get_jobs() do
     GenServer.call(__MODULE__, :get_jobs)
   end
 
   def update_job_progress(job_id, progress) do
-    IO.puts("Job #{job_id} is #{progress}% done!")
+    GenServer.cast(__MODULE__, { :progress, job_id, progress})
   end
 
   def mark_job_complete(job_id, result) do
     GenServer.cast(__MODULE__, { :complete, job_id, result })
+  end
+
+  def kill_job(job_id) do
+    GenServer.cast(__MODULE__, { :kill, job_id })
+  end
+
+  def kill_all_jobs() do
+    GenServer.cast(__MODULE__, :kill_all)
   end
 
   # Callbacks
@@ -66,28 +80,65 @@ defmodule Background.JobQueue do
   end
 
   @impl true
-  def handle_cast({ :complete, job_id, result}, state) do
-    IO.puts("Recieved job #{job_id} complete")
+  def handle_cast(:clear_failed, state) do
+    { :noreply, %{ state | failed: %{} } }
+  end
+
+  @impl true
+  def handle_cast({ :progress, job_id, progress}, state) do
+    { :noreply, put_in(state, [:running, job_id, :progress], progress) }
+  end
+
+  @impl true
+  def handle_cast({ :complete, job_id, { :ok, data }}, state) do
     job_spec = get_in(state, [:running, job_id])
 
-    new_state = case result do
-      {:ok, _data} -> case Map.get(job_spec, :type) do
-          # TODO - Handle successfully completed recode
-          :recode -> IO.inspect("Successfully completed recode")
-          # TODO - Handle successfully completed metadata
-          :metadata -> IO.inspect("Successfully completed metadata")
-          # These two should never run
-          nil -> IO.inspect("Somehow managed to finish a non-existing job?!")
-          other_key -> IO.inspect("Finished uncontrolled job #{inspect(other_key)}")
-        end
-        state
-      # TODO - Handle failed tasks
-      {:error, reason } ->
-        IO.inspect("Uh oh! Failed task! #{inspect(reason)}")
-        %{ state | failed: Map.put_new(state.failed, job_id, job_spec)}
+    case Map.get(job_spec, :type) do
+      # TODO - Handle successfully completed recode
+      :recode -> IO.puts("Recode successfully finished!")
+      :metadata -> StateManager.set_path_metadata(job_spec.path, data)
+      # These two should never run
+      nil -> IO.inspect("Somehow managed to finish a non-existing job?!")
+      other_key -> IO.inspect("Finished uncontrolled job #{inspect(other_key)}")
     end
 
-    { :noreply, %{ new_state | running: Map.delete(state.running, job_id)}}
+    { :noreply, %{ state | running: Map.delete(state.running, job_id)}}
+  end
+
+  @impl true
+  def handle_cast({ :complete, job_id, { :error, error_data }}, state) do
+    IO.inspect("Uh oh! Failed task #{job_id}! (#{inspect(error_data)})")
+
+    job_spec = get_in(state, [:running, job_id])
+
+    failed_spec = Map.delete(job_spec, :pid) |> Map.merge(%{
+      fail_ts: System.system_time(:second),
+      error_data: error_data
+    })
+
+    new_failed = Map.put_new(state.failed, job_id, failed_spec)
+    new_running = Map.delete(state.running, job_id)
+
+    { :noreply, %{ state | failed: new_failed, running: new_running } }
+  end
+
+  @impl true
+  def handle_cast({ :kill, job_id }, state) do
+    case get_in(state, [:running, job_id, :pid]) do
+      nil ->
+        IO.puts("Job #{job_id} is not running!")
+        { :noreply, state }
+      pid when is_pid(pid) ->
+        Process.exit(pid, :kill)
+        new_running = Map.delete(state.running, job_id)
+        { :noreply, %{ state | running: new_running } }
+    end
+  end
+
+  @impl true
+  def handle_cast(:kill_all, state) do
+    state.running |> Map.values() |> Enum.map(&(Map.get(&1, :pid))) |> Enum.each(&(Process.exit(&1, :kill)))
+    { :noreply, %{ state | running: %{} }}
   end
 
   @impl true
@@ -104,12 +155,12 @@ defmodule Background.JobQueue do
     start_result = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
     intermediate_state = case start_result do
-      { :ok, _pid } ->
-        new_running = Map.put(running, job_id, Map.put_new(job_data, :progress, 0))
-        %{ state | running: new_running }
+      { :ok, pid } ->
+        new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
+        %{ state | running: Map.put(running, job_id, new_job_data) }
       { :error, reason } ->
-        new_failed = Map.put(failed, job_id, Map.put_new(job_data, :error, reason))
-        %{ state | failed: new_failed}
+        new_job_data = Map.merge(job_data, %{ start_ts: System.system_time(:second), error: reason })
+        %{ state | failed: Map.put(failed, job_id, new_job_data) }
     end
 
     # Requeue if there's still jobs to do

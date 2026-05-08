@@ -27,3 +27,6 @@ out/
 
 # Ignore VSCode settings
 .vscode
+
+# Personal iEx debugging settings
+.iex.exs

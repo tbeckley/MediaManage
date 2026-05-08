@@ -1,4 +1,4 @@
-<% alias FormatTools %>
+<% import FormatTools %>
 
 <html>
 <head>
@@ -32,29 +32,31 @@
         background: color-mix(in srgb, Canvas 80%, CanvasText);
     }
 
-    .table-files .col-main {
+    .col-main {
         width: 60%;
     }
 
-    .table-files .col-auto {
+    .col-auto {
         width: auto;
     }
 
-    .table-watched-paths .col-main {
-        width: 60%;   /* or auto if you prefer */
-    }
-
-    .table-watched-paths .col-auto {
-        width: auto;
+    .col-half {
+        width: 50%;
     }
 
     .col-action {
         width: 48px;
     }
 
+    table tr td:last-child {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* Truncation */
-    .table-files td:first-child {
-        max-width: 0;      /* allows shrinking */
+    td:first-child {
+        max-width: 0;
         padding-right: 80px;
     }
 
@@ -67,8 +69,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-}
-
+    }
 
     /* Error row */
     .table-error {
@@ -118,14 +119,46 @@
         <symbol id="icon-plus" viewBox="0 0 24 24">
             <path d="M19 11H13V5h-2v6H5v2h6v6h2v-6h6z"/>
         </symbol>
+
+        <symbol id="icon-x" viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </symbol>
     </defs>
     </svg>
+    <title>MediaManage Metadata and Reencoding Server</title>
 </head>
 
 <body>
-    <h1>Watched Paths</h1>
+    <h1>MediaManage Metadata and Reencoding Server</h1>
+    Page rendered: <%= page_render_time %>
 
-    <table class="table-watched-paths">
+    <h2>Jobs </h2>
+    <table>
+        <colgroup>
+            <col class="col-half">
+            <col class="col-half">
+            <col class="col-action">
+        </colgroup>
+        <%= for job <- job_data.running do %>
+        <tr>
+            <td> <%= job.description %></td>
+            <td> Running (<%= job.duration  %>), <%= job.progress %>% </td>
+            <!-- TODO: MAKE AN X -->
+            <td> <button disabled type="submit"><svg class="icon"><use href="#icon-x"/></svg></button></td>
+        </tr>
+        <% end %>
+        <%= for job <- job_data.queued do %>
+        <tr>
+            <td> <%= job.description %></td>
+            <td> Queued </td>
+            <!-- TODO: MAKE AN TRASH CAN -->
+            <td> <button disabled type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button></td>>
+        </tr>
+        <% end %>
+    </table>
+
+    <h2>Watched Paths</h2>
+    <table>
         <colgroup>
             <col class="col-main">
             <col class="col-auto">
@@ -150,18 +183,17 @@
         <% end %>
         <tr>
             <form action="/watchpath" method="post">
-                <td style="height: 90%"> <input type="text" name="path" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                    placeholder="/mnt/...." / style="width: 100%; height: 100%;"> </td>
+                <td style="height: 90%"> <input type="text" name="path" autocomplete="off"
+                    autocorrect="off" autocapitalize="off" spellcheck="false"
+                    placeholder="/mnt/...." style="width: 100%; height: 100%;"> </td>
                 <td> </td>
                 <td><button type="submit"><svg class="icon"><use href="#icon-plus"/></svg></button></td>
             </form>
         </tr>
     </table>
 
-
-    <h1>Files</h1>
-
-    <table class="table-files">
+    <h2>Files</h2>
+    <table class>
         <colgroup>
             <col class="col-main">
             <col class="col-auto">
@@ -179,18 +211,21 @@
                 </div>
             </td>
 
-            <td><%= metadata |> Map.get(:video_codec) |> FormatTools.format_codec() %></td>
-            <td><%= metadata |> Map.get(:duration) |> FormatTools.format_duration() %></td>
-            <td><%= metadata |> Map.get(:bps) |> FormatTools.format_bps() %></td>
+            <td><%= format_codec(Map.get(metadata, :video_codec)) %></td>
+            <td><%= format_duration(Map.get(metadata, :duration)) %></td>
+            <td><%= format_bps(Map.get(metadata, :bps)) %></td>
 
             <td>
                 <%= if not metadata.broken do %>
-                    <button><svg class="icon"><use href="#icon-forward"/></svg></button>
+                <form action="/recode" method="post">
+                    <input type="hidden" name="_method" value="patch">
+                    <input type="hidden" name="path" value="<%= file_path %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-forward"/></svg></button>
+                </form>
                 <% end %>
             </td>
         </tr>
         <% end %>
     </table>
-
 </body>
 </html>

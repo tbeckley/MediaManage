@@ -9,7 +9,23 @@ defmodule MediaManage.Router do
   get "/" do
     data = StateManager.get_media()
 
-    path_data = data |> Map.to_list() |> Enum.map(fn {path, data} ->
+    system_time = System.system_time(:second)
+
+    jobs = Background.JobQueue.get_jobs()
+
+    running_jobs = Enum.map(jobs.running, fn { id, job } -> %{
+      id: id,
+      description: FormatTools.describe_job(job),
+      duration: FormatTools.format_duration(system_time - job.start_ts),
+      progress: job.progress
+    } end)
+
+    queued_jobs = Enum.map(jobs.queued,  fn { id, job } -> %{
+      id: id,
+      description: FormatTools.describe_job(job),
+    } end)
+
+    path_data = Map.to_list(data) |> Enum.map(fn {path, data} ->
       dt = case Map.get(data, :last_updated) do
         nil -> nil
         time -> System.system_time(:second) - time
@@ -24,7 +40,14 @@ defmodule MediaManage.Router do
 
     file_data = Map.values(data) |> Enum.flat_map(&Map.get(&1, :media_files))
 
-    html = EEx.eval_file("templates/index.html.eex", path_data: path_data, file_data: file_data)
+    render_time = NaiveDateTime.local_now() |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
+
+    html = EEx.eval_file("templates/index.html.eex", [
+      { :path_data, path_data },
+      { :file_data, file_data },
+      { :job_data, %{ running: running_jobs, queued: queued_jobs } },
+      { :page_render_time, render_time }
+    ])
     send_resp(conn, :ok, html)
   end
 
@@ -48,6 +71,12 @@ defmodule MediaManage.Router do
   end
 
   patch "/recode" do
+    %{ params: %{ "path" => path }} = conn
+
+    # TODO - Get these from frontend somehow, or state at least
+    encode_opts = { :hevc, "medium", 24 }
+
+    Background.JobQueue.queue_recode_file(path, encode_opts)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
   end
 

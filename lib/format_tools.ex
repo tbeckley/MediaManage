@@ -1,4 +1,10 @@
 defmodule FormatTools do
+  @encodings %{
+    :hevc => "H.265 (hevc)",
+    :h264 => "H.264",
+    :av1 =>  "AV1"
+  }
+
   def format_duration(nil) do "" end
 
   def format_duration(seconds_decimal) do
@@ -32,5 +38,14 @@ defmodule FormatTools do
 
   def format_pretty(val) do
     inspect(val, [{ :limit, :infinity }, { :pretty, :true }])
+  end
+
+  def describe_job(spec) do
+    case spec.type do
+      # TODO - Include smarter encoding type checking
+      :recode -> "Re-encode #{spec.path} to #{Map.get(@encodings, elem(spec.encode_opts, 0))}"
+      :metadata -> "Update metadata on #{spec.path}"
+      type -> "Do #{inspect(type)} (#{inspect(spec)}) on #{spec.path}"
+    end
   end
 end

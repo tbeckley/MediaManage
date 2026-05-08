@@ -21,9 +21,10 @@ defmodule MediaManage.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      { :ffmpex, git: "git@github.com:tbeckley/ffmpex.git", branch: "flag_v" },
+      { :ffmpex, "~> 0.11.1" },
       { :plug, "~> 1.19.0"},
-      { :bandit, "~> 1.8" }
+      { :bandit, "~> 1.8" },
+      { :dialyxir, "~> 1.4", only: [:dev], runtime: false}
     ]
   end
 end
