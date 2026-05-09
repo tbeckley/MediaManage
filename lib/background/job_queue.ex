@@ -1,8 +1,6 @@
 defmodule Background.JobQueue do
   use GenServer
 
-
-
   # Public API
   def start_link(_options) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
@@ -17,11 +15,19 @@ defmodule Background.JobQueue do
     GenServer.cast(__MODULE__, {:enqueue, %{type: :metadata, path: dir_path}})
   end
 
+  def cancel_queued(job_id) do
+    GenServer.cast(__MODULE__, { :cancel, job_id } )
+  end
+
   def clear_queue() do
     GenServer.cast(__MODULE__, :clear_queue)
   end
 
-  def clear_failed() do
+  def clear_failed(job_id) do
+    GenServer.cast(__MODULE__, { :clear_failed, job_id })
+  end
+
+  def clear_all_failed() do
     GenServer.cast(__MODULE__, :clear_failed)
   end
 
@@ -29,19 +35,19 @@ defmodule Background.JobQueue do
     GenServer.call(__MODULE__, :get_jobs)
   end
 
-  def update_job_progress(job_id, progress) do
+  def update_progress(job_id, progress) do
     GenServer.cast(__MODULE__, { :progress, job_id, progress})
   end
 
-  def mark_job_complete(job_id, result) do
+  def mark_complete(job_id, result) do
     GenServer.cast(__MODULE__, { :complete, job_id, result })
   end
 
-  def kill_job(job_id) do
+  def kill(job_id) do
     GenServer.cast(__MODULE__, { :kill, job_id })
   end
 
-  def kill_all_jobs() do
+  def kill_all() do
     GenServer.cast(__MODULE__, :kill_all)
   end
 
@@ -53,14 +59,15 @@ defmodule Background.JobQueue do
       next_job_id: 0,
       queued: %{},
       running: %{},
-      failed: %{}
+      failed: %{},
+      max_concurrency: :infinity
     }
 
     {:ok, default_state }
   end
 
   @impl true
-  def handle_cast({:enqueue, new_job}, state) do
+  def handle_cast({ :enqueue, new_job }, state) do
     %{ next_job_id: next_job_id } = state
     new_state = %{
       put_in(state, [:queued, next_job_id], new_job) |
@@ -74,9 +81,19 @@ defmodule Background.JobQueue do
     { :noreply, new_state }
   end
 
+  def handle_cast({ :cancel, job_id }, state) do
+    { :noreply, %{ state | queued: Map.delete(state.queued, job_id) } }
+
+  end
+
   @impl true
   def handle_cast(:clear_queue, state) do
     { :noreply, %{ state | queued: %{} } }
+  end
+
+  @impl true
+  def handle_cast({ :clear_failed, job_id }, state) do
+    { :noreply, %{ state | failed: Map.delete(state.failed, job_id) } }
   end
 
   @impl true
@@ -94,7 +111,6 @@ defmodule Background.JobQueue do
     job_spec = get_in(state, [:running, job_id])
 
     case Map.get(job_spec, :type) do
-      # TODO - Handle successfully completed recode
       :recode -> StateManager.report_reencoded(job_spec.path, data)
       :metadata -> StateManager.set_path_metadata(job_spec.path, data)
       # These two should never run
@@ -125,6 +141,7 @@ defmodule Background.JobQueue do
     case get_in(state, [:running, job_id, :pid]) do
       nil ->
         IO.puts("Job #{job_id} is not running!")
+        IO.inspect(Map.get(state.running, 0))
         { :noreply, state }
       pid when is_pid(pid) ->
         Process.exit(pid, :kill)

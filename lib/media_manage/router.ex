@@ -25,6 +25,12 @@ defmodule MediaManage.Router do
       description: FormatTools.describe_job(job),
     } end)
 
+    failed_jobs = Enum.map(jobs.failed, fn { id, job } -> %{
+      id: id,
+      description: FormatTools.describe_job(job),
+      error_msg: FormatTools.format_job_error(job.error_data)
+    } end)
+
     path_data = Map.to_list(data) |> Enum.map(fn {path, data} ->
       dt = case Map.get(data, :last_updated) do
         nil -> nil
@@ -45,7 +51,7 @@ defmodule MediaManage.Router do
     html = EEx.eval_file("templates/index.html.eex", [
       { :path_data, path_data },
       { :file_data, file_data },
-      { :job_data, %{ running: running_jobs, queued: queued_jobs } },
+      { :job_data, %{ running: running_jobs, queued: queued_jobs, failed: failed_jobs } },
       { :page_render_time, render_time }
     ])
     send_resp(conn, :ok, html)
@@ -76,9 +82,25 @@ defmodule MediaManage.Router do
 
     # TODO - Get these from frontend somehow, or state at least
     # TODO - Change
-    encode_opts = { :hevc, "faster", 24 }
+    encode_opts = { :hevc, "slow", 24 }
 
     Background.JobQueue.queue_recode_file(path, encode_opts)
+    conn |> put_resp_header("location", "/") |> send_resp(302, "")
+  end
+
+  delete "/job" do
+    # TODO - Make sure it's not a subpath or superpath of an existing path...
+    %{ params: %{ "job_id" => id_str, "job_state" => job_state }} = conn
+
+    job_id = String.to_integer(id_str)
+
+    case String.downcase(job_state) do
+      "running" -> Background.JobQueue.kill(job_id)
+      "queued" -> Background.JobQueue.cancel_queued(job_id)
+      "failed" -> Background.JobQueue.clear_failed(job_id)
+      other -> IO.puts("Unknown job status? #{inspect(other)}")
+    end
+
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
   end
 

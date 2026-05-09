@@ -161,14 +161,42 @@
         <tr class="table-running">
             <td> <%= job.description %></td>
             <td> Running (<%= job.duration  %>), <%= job.progress %>% </td>
-            <td> <button disabled type="submit"><svg class="icon"><use href="#icon-x"/></svg></button></td>
+            <td>
+                <form action="/job" method="post">
+                    <input type="hidden" name="_method" value="delete">
+                    <input type="hidden" name="job_state" value="running">
+                    <input type="hidden" name="job_id" value="<%= job.id %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-x"/></svg></button>
+                </form>
+            </td>
         </tr>
         <% end %>
         <%= for job <- job_data.queued do %>
         <tr class="table-queued">
             <td> <%= job.description %></td>
             <td> Queued </td>
-            <td> <button disabled type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button></td>>
+            <td>
+                <form action="/job" method="post">
+                    <input type="hidden" name="_method" value="delete">
+                    <input type="hidden" name="job_state" value="queued">
+                    <input type="hidden" name="job_id" value="<%= job.id %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button>
+                </form>
+            </td>
+        </tr>
+        <% end %>
+        <%= for job <- job_data.failed do %>
+        <tr class="table-error">
+            <td> <%= job.description %></td>
+            <td> Failed: <%= job.error_msg %> </td>
+            <td>
+                <form action="/job" method="post">
+                    <input type="hidden" name="_method" value="delete">
+                    <input type="hidden" name="job_state" value="failed">
+                    <input type="hidden" name="job_id" value="<%= job.id %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button>
+                </form>
+            </td>
         </tr>
         <% end %>
         <!-- TODO: Failed jobs with diagnostics -->
@@ -180,6 +208,7 @@
             <col class="col-main">
             <col class="col-auto">
             <col class="col-action">
+            <col class="col-action">
         </colgroup>
 
         <%= for %{ path: path, able_refresh: able_refresh, modified_ago: modified_ago } <- path_data do %>
@@ -187,14 +216,20 @@
             <td><%= path %></td>
             <td>Last updated: <%= modified_ago %></td>
             <td>
-                <!-- TODO: Remove -->
-                <%= if able_refresh or :true do %>
+                <%= if able_refresh do %>
                 <form action="/watchpath" method="post">
                     <input type="hidden" name="_method" value="patch">
                     <input type="hidden" name="path" value="<%= path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-refresh"/></svg></button>
                 </form>
                 <% end %>
+            </td>
+            <td>
+                <form action="/watchpath" method="post">
+                    <input type="hidden" name="_method" value="delete">
+                    <input type="hidden" name="path" value="<%= path %>">
+                    <button type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button>
+                </form>
             </td>
         </tr>
         <% end %>
@@ -205,6 +240,7 @@
                     placeholder="/mnt/...." style="width: 100%; height: 100%;"> </td>
                 <td> </td>
                 <td><button type="submit"><svg class="icon"><use href="#icon-plus"/></svg></button></td>
+                <td></td>
             </form>
         </tr>
     </table>

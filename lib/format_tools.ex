@@ -48,4 +48,14 @@ defmodule FormatTools do
       type -> "Do #{inspect(type)} (#{inspect(spec)}) on #{spec.path}"
     end
   end
+
+  def format_job_error(error_data) do
+    case error_data do
+      { :ffmpeg, ffmpeg_msg } -> "FFMpeg error: #{ffmpeg_msg}"
+      { :exception, e, stacktrace } -> "Please report this! \n Exception: #{inspect(e)}, \n Stacktrace: #{inspect(stacktrace)}"
+      { :erlang, kind, reason } -> "Please report this! \n Erlang error: #{inspect(kind)}, #{inspect(reason)}"
+      { :error, other } -> "Please report this! \n Unknown logic error: #{inspect(other, [{ :pretty, :true }])}"
+    other -> "Please report this! \n Unknown logic error: #{inspect(other, [{ :pretty, :true }])}"
+    end
+  end
 end

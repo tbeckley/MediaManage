@@ -59,36 +59,32 @@ defmodule Video do
     end
   end
 
-  defp time_from_chunk({ msg_type, msg }) do
-    # Chunks come in broken, so the out_time_ms line can be split
-    # across multiple chunks. In that case we'll miss messages, but what can you do?
-    # Other option would be a ring buffer of some sort or a GenServer, but I don't
-    # Want to spin one of those up for this.
-    match_regex = ~r/out_time_us=(\d+)\r?\n/
-
-    case msg_type do
-      :stderr -> nil
-      :stdout -> case Regex.run(match_regex, msg) do
-        [_, time_ms] -> String.to_integer(time_ms) / 1_000_000
-        nil -> nil
-      end
+  # I don't feel great about this. I _ALMOST_ feel that the new path should come from higher up the chain
+  # So we're not just blindly trusting that the recode_file() function works properly
+  defp get_recode_paths(input_path, codec, workdir \\ :nil) do
+    { encode_supersuffix, output_extension } = case codec do
+      :hevc -> { ".x265", ".mp4" }
+      # :mp4 -> { ".x264", ".mp4" }
+      # :av1 -> ".av1"
     end
-  end
 
-  # I really need a better way of matching on this...
-  defp ffmpeg_err_is_error(err_msg) do
-    err_msg_lower = String.downcase(err_msg)
+    workpath = workdir || Path.dirname(input_path)
 
-    # Yes, it returns status code zero and :ok when it fails. Sigh. Why even have the -n option?!
-    known_error_patterns = [
-      "already exists. exiting."
-    ]
+    workfile = Path.join(workpath, Path.basename(input_path) <> encode_supersuffix)
+    final_file = Path.rootname(input_path) <> output_extension
 
-    String.contains?(err_msg_lower, "error") and String.contains?(err_msg_lower, known_error_patterns)
+    IO.puts(workfile)
+    IO.puts(final_file)
+
+    { workfile, final_file }
   end
 
   def recode_file(video_path, encoding_options, progress_callback \\ nil) do
-    # TODO - Enable maps for encoding options
+    # TODO - Add more or let user supply
+    target_codec = elem(encoding_options, 0)
+    { work_file_path, final_file_path } = get_recode_paths(video_path, target_codec)
+
+        # TODO - Enable maps for encoding options
     file_opts = case encoding_options do
       { :hevc, preset, crf } ->  [
         option_vcodec("libx265"),
@@ -101,19 +97,11 @@ defmodule Video do
       _ -> raise "Unknown encoding options! #{inspect(encoding_options)}"
     end
 
-    # TODO - Add more or let user supply
-    { encode_suffix, output_suffix } = case elem(encoding_options, 0) do
-      :hevc -> { ".x265", ".mp4" }
-      # :mp4 -> { ".x264", ".mp4" }
-      # :av1 -> ".av1"
-    end
-
     # TODO - Allow different temp directory for encoding into and copying
     # TODO - Choose correct name suffix
-    output_file_path = video_path  <> encode_suffix
     %{ duration: duration } = Video.get_video_metadata(video_path, [:assume_ok])
 
-    base_cmd = FFmpex.new_command() |> add_input_file(video_path) |> add_output_file(output_file_path)
+    base_cmd = FFmpex.new_command() |> add_input_file(video_path) |> add_output_file(work_file_path)
     with_global_opts = Enum.reduce(@global_ffmpeg_encode_opts, base_cmd, fn opt, acc -> add_global_option(acc, opt) end)
     full_cmd = Enum.reduce(file_opts, with_global_opts, fn opt, acc -> add_file_option(acc, opt) end)
 
@@ -127,7 +115,7 @@ defmodule Video do
     # IO.puts(Enum.join([bin | full_opts], " "))
 
     log_behaviour = if is_function(progress_callback) do
-      fn msg -> case time_from_chunk(msg) do
+      fn msg -> case FFmpegHelper.time_from_chunk(msg) do
         nil -> :ok
         time when is_number(time) -> progress_callback.(trunc(time * 100 / duration))
       end end
@@ -137,35 +125,27 @@ defmodule Video do
 
     ffmpeg_result = Rambo.run(bin, full_opts, [{ :log, log_behaviour }])
 
-    # Garbage out, garbage in. Only way
-    new_metadata = get_video_metadata(output_file_path, [:assume_ok])
-
-    # For debugging
-    IO.inspect(new_metadata)
-
     ffmpeg_result = case ffmpeg_result do
       { :error, e } -> { :error, { :ffmpeg, e } }
       { :ok, %Rambo{ status: status_code, err: stderr } } when status_code != 0 -> { :error, { :ffmpeg, stderr }}
       { :ok, %Rambo{ status: 0, err: stderr } } ->
-        if ffmpeg_err_is_error(stderr) do
+        if FFmpegHelper.errmsg_is_error(stderr) do
           { :error, { :ffmpeg, stderr }}
         else
-          { :ok, new_metadata }
+          :ok
         end
     end
 
     case ffmpeg_result do
-      { :ok, new_metadata } ->
-        # This might or might not be the same as the old file name
-        new_video_path = Path.rootname(video_path) <> output_suffix
-
+      :ok ->
         # Delete the old file
         File.rm!(video_path)
-        File.rename!(output_file_path, new_video_path)
-
-        { :ok, %{ new_video_path => new_metadata } }
+        File.rename!(work_file_path, final_file_path)
+        new_metadata = get_video_metadata(final_file_path)
+        { :ok, %{ final_file_path => new_metadata } }
       { :error, reason } ->
-        File.rm!(output_file_path)
+        # Cleanup on a failed recode for some reason
+        File.rm!(work_file_path)
         { :error, reason }
     end
   end

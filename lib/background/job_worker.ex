@@ -8,7 +8,7 @@ defmodule Background.JobWorker do
   end
 
   defp run({ job_id, job_data }) do
-    progress_callback = &(update_job_progress(job_id, &1))
+    progress_callback = &(update_progress(job_id, &1))
 
     result = try do
        case job_data.type do
@@ -24,9 +24,9 @@ defmodule Background.JobWorker do
       { :error, { :exception, exception, __STACKTRACE__ } }
     # Catches all the other nonsense.
     catch kind, reason ->
-      { :error, { kind, reason } }
+      { :error, { :erlang, kind, reason } }
     end
 
-    mark_job_complete(job_id, result)
+    mark_complete(job_id, result)
   end
 end
