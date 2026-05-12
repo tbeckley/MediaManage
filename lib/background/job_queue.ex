@@ -6,13 +6,24 @@ defmodule Background.JobQueue do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
-  def queue_recode_file(file_path, encode_opts) do
-    GenServer.cast(__MODULE__, {:enqueue, %{type: :recode,
-      path: file_path, encode_opts: encode_opts}})
+  def queue_recode_file(file_path, encode_params) do
+    GenServer.cast(__MODULE__, {:enqueue, %{
+      type: :recode,
+      path: file_path,
+      opts: %{
+        encode_params: encode_params
+    }}})
   end
 
   def queue_metadata_update(dir_path) do
-    GenServer.cast(__MODULE__, {:enqueue, %{type: :metadata, path: dir_path}})
+    metadata = get_in(StateManager.get_media(), [dir_path, :media_files])
+
+    GenServer.cast(__MODULE__, {:enqueue, %{
+      type: :metadata,
+      path: dir_path,
+      opts: %{
+        existing: metadata
+    }}})
   end
 
   def cancel_queued(job_id) do
@@ -125,12 +136,7 @@ defmodule Background.JobQueue do
   def handle_cast({ :complete, job_id, { :error, error_data }}, state) do
     job_spec = get_in(state, [:running, job_id])
 
-    failed_spec = Map.delete(job_spec, :pid) |> Map.merge(%{
-      fail_ts: System.system_time(:second),
-      error_data: error_data
-    })
-
-    new_failed = Map.put_new(state.failed, job_id, failed_spec)
+    new_failed = Map.put_new(state.failed, job_id, gen_failed_entry(job_spec, error_data))
     new_running = Map.delete(state.running, job_id)
 
     { :noreply, %{ state | failed: new_failed, running: new_running } }
@@ -138,13 +144,27 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :kill, job_id }, state) do
-    case get_in(state, [:running, job_id, :pid]) do
+    job_data = Map.get(state.running, job_id)
+    case Map.get(job_data, :pid) do
       nil ->
         IO.puts("Job #{job_id} is not running!")
         IO.inspect(Map.get(state.running, 0))
         { :noreply, state }
       pid when is_pid(pid) ->
         Process.exit(pid, :kill)
+
+        case Map.get(job_data, :cleanup_fn) do
+          nil ->
+            IO.puts("No cleanup needed after #{job_id}")
+          # TODO - Should swallow or handle (better) errors
+          cleanup_fn when is_function(cleanup_fn) ->
+            IO.puts("Cleaning up after job #{job_id}")
+            cleanup_fn.()
+          cleanup_fn ->
+            IO.puts("Somehow managed to get a cleanup \
+              function that wasn't a function or nil! #{inspect(cleanup_fn)}. Please report this!")
+        end
+
         new_running = Map.delete(state.running, job_id)
         { :noreply, %{ state | running: new_running } }
     end
@@ -163,19 +183,21 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_info(:run_next, state) do
-    %{ queued: queued, running: running, failed: failed } = state
-    job_id = Map.keys(queued) |> Enum.min()
-    { job_data, others } = Map.pop(queued, job_id)
+    job_id = Map.keys(state.queued) |> Enum.min()
+    { job_data, others } = Map.pop(state.queued, job_id)
 
-    start_result = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
-
-    intermediate_state = case start_result do
-      { :ok, pid } ->
-        new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
-        %{ state | running: Map.put(running, job_id, new_job_data) }
-      { :error, reason } ->
-        new_job_data = Map.merge(job_data, %{ start_ts: System.system_time(:second), error: reason })
-        %{ state | failed: Map.put(failed, job_id, new_job_data) }
+    new_state = case prepare_job(job_data) do
+      { :error, error_reason } ->
+        failed_entry = gen_failed_entry(job_data, error_reason)
+        put_in(state, [:failed, job_id], failed_entry)
+      { :ok, run_fn, cleanup_fn } ->
+        running_entry = Map.merge(job_data, %{
+          start_ts: System.system_time(:second),
+          progress: 0,
+          pid: start_worker(job_id, run_fn),
+          cleanup_fn: cleanup_fn
+        })
+        put_in(state, [:running, job_id], running_entry)
     end
 
     # Requeue if there's still jobs to do
@@ -184,6 +206,37 @@ defmodule Background.JobQueue do
       send(self(), :run_next)
     end
 
-    { :noreply, %{ intermediate_state | queued: others } }
+    { :noreply, %{ new_state | queued: others } }
+  end
+
+  # Private Helpers
+
+  defp gen_failed_entry(job_spec, fail_reason) do
+    job_spec |> Map.drop([:pid, :cleanup_fn, :progress]) |> Map.merge(%{
+      fail_ts: System.system_time(:second),
+      error_data: fail_reason
+    })
+  end
+
+
+  defp start_worker(job_id, run_fn) do
+    { :ok, pid } = DynamicSupervisor.start_child(
+      Background.JobSupervisor,{
+      Background.JobWorker, { job_id, run_fn }
+    })
+
+    pid
+  end
+
+  defp prepare_job(job_data) do
+    job_mod = Video.module_for(job_data.type)
+    job_opts = Map.get(job_data, :opts, %{})
+
+    # TODO - Convert the job opts better I think
+    case job_mod.prepare_as_job(job_data.path, job_opts) do
+      { :error, reason } -> { :error, reason }
+      { :ok, run_fn } -> { :ok, run_fn, nil }
+      { :ok, run_fn, cleanup_fn } -> { :ok, run_fn, cleanup_fn }
+    end
   end
 end

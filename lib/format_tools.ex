@@ -43,7 +43,12 @@ defmodule FormatTools do
   def describe_job(spec) do
     case spec.type do
       # TODO - Include smarter encoding type checking
-      :recode -> "Re-encode #{spec.path} to #{Map.get(@encodings, elem(spec.encode_opts, 0))}"
+      :recode ->
+        new_codec = case Map.get(spec.opts, :encode_params) do
+          nil -> "???"
+          params -> Map.get(@encodings, elem(params, 0), "???")
+        end
+        "Re-encode #{spec.path} to #{new_codec}"
       :metadata -> "Update metadata on #{spec.path}"
       type -> "Do #{inspect(type)} (#{inspect(spec)}) on #{spec.path}"
     end

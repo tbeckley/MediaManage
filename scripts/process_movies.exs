@@ -13,7 +13,7 @@ end
 # Need the uniq to cover a corner case with symlinks and the way gvfs mounts network drives...
 media_to_process =  Enum.map(base_paths, &"#{&1}/**")
                     |> Enum.flat_map(&Path.wildcard/1)
-                    |> Enum.filter(&MediaManage.video_file?/1)
+                    |> Enum.filter(&.Video.video_file?/1)
                     |> Enum.uniq();
 
 item_count = length(media_to_process)

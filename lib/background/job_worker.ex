@@ -3,22 +3,15 @@ import Background.JobQueue
 defmodule Background.JobWorker do
   use Task
 
-  def start_link(job) do
-    Task.start_link(fn -> run(job) end)
+  def start_link({job_id, run_fn}) do
+    Task.start_link(fn -> run(job_id, run_fn) end)
   end
 
-  defp run({ job_id, job_data }) do
+  defp run(job_id, run_fn) do
     progress_callback = &(update_progress(job_id, &1))
 
     result = try do
-       case job_data.type do
-        :recode ->
-          # TODO - Allow user to pick target re-encoding type
-          Video.recode_file(job_data.path, job_data.encode_opts, progress_callback)
-        :metadata ->
-          metadata = get_in(StateManager.get_media(), [job_data.path, :media_files])
-          Video.path_metadata_smart(job_data.path, metadata, progress_callback)
-      end
+      run_fn.(progress_callback)
     # Catches elixir / erlang stuff
     rescue exception ->
       { :error, { :exception, exception, __STACKTRACE__ } }

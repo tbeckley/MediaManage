@@ -82,9 +82,9 @@ defmodule MediaManage.Router do
 
     # TODO - Get these from frontend somehow, or state at least
     # TODO - Change
-    encode_opts = { :hevc, "slow", 24 }
+    encode_params = Video.Recode.default_encoding()
 
-    Background.JobQueue.queue_recode_file(path, encode_opts)
+    Background.JobQueue.queue_recode_file(path, encode_params)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
   end
 
