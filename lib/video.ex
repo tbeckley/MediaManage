@@ -12,8 +12,14 @@ defmodule Video do
     option_xerror()
   ]
 
+  @default_encode_opts { :hevc, "medium", 24 }
+
   def video_file?(video_path) do
     !File.dir?(video_path) and String.ends_with?(Path.extname(video_path), @file_extension)
+  end
+
+  def default_encode_opts() do
+    @default_encode_opts
   end
 
   defp broken?(video_path) do
@@ -73,80 +79,87 @@ defmodule Video do
     workfile = Path.join(workpath, Path.basename(input_path) <> encode_supersuffix)
     final_file = Path.rootname(input_path) <> output_extension
 
-    IO.puts(workfile)
-    IO.puts(final_file)
+    # Debugging
+    #IO.puts(workfile)
+    #IO.puts(final_file)
 
     { workfile, final_file }
   end
 
-  def recode_file(video_path, encoding_options, progress_callback \\ nil) do
-    # TODO - Add more or let user supply
-    target_codec = elem(encoding_options, 0)
-    { work_file_path, final_file_path } = get_recode_paths(video_path, target_codec)
+  def recode_file(video_path, encoding_options, job_functions \\ %{}) do
+    update_progress = Map.get(job_functions, :progress, :false)
+    register_cleanup = Map.get(job_functions, :cleanup)
 
-        # TODO - Enable maps for encoding options
-    file_opts = case encoding_options do
-      { :hevc, preset, crf } ->  [
-        option_vcodec("libx265"),
-        option_acodec("copy"),
-        option_vtag("hvc1"),
-        option_f("mp4"),
-        option_preset(preset),
-        option_crf(crf),
-        option_tune("fastdecode") ]
-      _ -> raise "Unknown encoding options! #{inspect(encoding_options)}"
-    end
+    target_codec = elem(encoding_options, 0)
+    %{ duration: duration } = Video.get_video_metadata(video_path, [:assume_ok])
 
     # TODO - Allow different temp directory for encoding into and copying
     # TODO - Choose correct name suffix
-    %{ duration: duration } = Video.get_video_metadata(video_path, [:assume_ok])
+    { work_path, out_path } = get_recode_paths(video_path, target_codec)
 
-    base_cmd = FFmpex.new_command() |> add_input_file(video_path) |> add_output_file(work_file_path)
+    cleanup_fn = fn -> File.rm(work_path) end
+    progress_fn = with c when is_function(c) <- update_progress do
+      fn chunk -> with t when not is_nil(t) <- FFmpegHelper.time_from_chunk(chunk) do
+          c.(min(100, trunc(t * 100 / duration)))
+        end
+      end
+    end
+
+    cond do
+      !File.exists?(video_path) -> { :error, :enoent }
+      File.exists?(work_path) -> { :error, :workfile_exists }
+      File.exists?(out_path) and out_path != video_path -> { :error, :outfile_exists }
+      :true ->
+        if is_function(register_cleanup) do
+            register_cleanup.(cleanup_fn)
+        end
+
+        ffmpeg_result = recode_file_guarded(video_path, work_path, encoding_options, progress_fn)
+
+        case ffmpeg_result do
+          { :ok, _ } ->
+            # Delete the old file
+            File.rm(video_path)
+            # I asked copilot for a review and it said there's a race condition here. I think that's wrong.
+            # Rename should just pave over the top anyway. At least it should on *nix. Unsure about Windows.
+            File.rename(work_path, out_path)
+            # TODO - Can I assume_ok? I guess I can...
+            new_metadata = get_video_metadata(out_path, [:assume_ok])
+            { :ok, %{ out_path => new_metadata } }
+          { :error, reason } ->
+            # Cleanup on a failed recode for some reason
+            cleanup_fn.()
+            { :error, reason }
+        end
+    end
+  end
+  defp recode_file_guarded(in_path, out_path, encoding_options, handle_log) do
+    file_opts = FFmpegHelper.ffmpeg_opts_from_encoding(encoding_options)
+
+    base_cmd = FFmpex.new_command() |> add_input_file(in_path) |> add_output_file(out_path)
     with_global_opts = Enum.reduce(@global_ffmpeg_encode_opts, base_cmd, fn opt, acc -> add_global_option(acc, opt) end)
     full_cmd = Enum.reduce(file_opts, with_global_opts, fn opt, acc -> add_file_option(acc, opt) end)
 
     { bin, opts } = FFmpex.prepare(full_cmd)
-
     # FFmpex doesn't have a option_stats_period() and I don't want to add one :(
     # We have to run anyway via Rambo so we'll just cheat :)
     full_opts = ["-stats_period", "5"] ++ opts
 
-    # For debugging
+    # TODO - Logging
     # IO.puts(Enum.join([bin | full_opts], " "))
 
-    log_behaviour = if is_function(progress_callback) do
-      fn msg -> case FFmpegHelper.time_from_chunk(msg) do
-        nil -> :ok
-        time when is_number(time) -> progress_callback.(trunc(time * 100 / duration))
-      end end
-    else
-      :false
-    end
+    ffmpeg_result = Rambo.run(bin, full_opts, [{ :log, handle_log }])
 
-    ffmpeg_result = Rambo.run(bin, full_opts, [{ :log, log_behaviour }])
-
-    ffmpeg_result = case ffmpeg_result do
-      { :error, e } -> { :error, { :ffmpeg, e } }
+    case ffmpeg_result do
+      { :error, %Rambo{ out: _out_msg, err: err_msg } } -> { :error, { :ffmpeg, err_msg } }
+      { :error, e } -> { :error, { :ffmpeg, e }}
       { :ok, %Rambo{ status: status_code, err: stderr } } when status_code != 0 -> { :error, { :ffmpeg, stderr }}
-      { :ok, %Rambo{ status: 0, err: stderr } } ->
+      { :ok, %Rambo{ status: 0, err: stderr, out: stdout } } ->
         if FFmpegHelper.errmsg_is_error(stderr) do
           { :error, { :ffmpeg, stderr }}
         else
-          :ok
+          { :ok, stdout }
         end
-    end
-
-    case ffmpeg_result do
-      :ok ->
-        # Delete the old file
-        File.rm!(video_path)
-        File.rename!(work_file_path, final_file_path)
-        new_metadata = get_video_metadata(final_file_path)
-        { :ok, %{ final_file_path => new_metadata } }
-      { :error, reason } ->
-        # Cleanup on a failed recode for some reason
-        File.rm!(work_file_path)
-        { :error, reason }
     end
   end
 
@@ -166,24 +179,25 @@ defmodule Video do
 
   # Wrapper to allow calling from iEx and scripts without caring about progress update
   def path_metadata_smart(path, existing_metadata \\ %{}) do
-    path_metadata_smart(path, existing_metadata, fn _ -> :ok end)
+    path_metadata_smart(path, existing_metadata, %{})
   end
 
   # If existing_metadata is supplied, only get video metadata for files that need it
-  def path_metadata_smart(path, existing_metadata, progress_callback) do
+  def path_metadata_smart(path, existing_metadata, job_functions)  do
     cond do
       !is_binary(path) -> { :error, :path_not_binary }
       !File.dir?(path) -> { :error, :path_not_basedir }
-      :true -> path_metadata_guarded(path, existing_metadata, progress_callback)
+      :true -> path_metadata_guarded(path, existing_metadata, job_functions)
     end
   end
 
-  defp path_metadata_guarded(path, existing_metadata, progress_callback) do
+  defp path_metadata_guarded(path, existing_metadata, job_functions) do
+    # Find out if we have a progress callback function available
+    progress_callback = Map.get(job_functions, :progress)
+
     # TODO - Path.wildcard is very bad and slow, optimize
     media_files = Path.wildcard("#{path}/**") |> Enum.filter(&video_file?/1)
-
     new_file_list = Enum.filter(media_files, &(file_changed?(&1, existing_metadata)))
-
     required_metadata_updates = length(new_file_list)
 
     # TODO - Use proper logging level
@@ -191,14 +205,17 @@ defmodule Video do
     #IO.puts(FormatTools.format_pretty(new_file_list))
 
     new_changed_files = Enum.with_index(new_file_list) |> Enum.reduce(%{}, fn {path, idx}, metadata_map ->
-      pct_done = trunc(idx / required_metadata_updates * 100)
-      progress_callback.(pct_done)
+      if not is_nil(progress_callback) do
+        pct_done = trunc(idx / required_metadata_updates * 100)
+        progress_callback.(pct_done)
+      end
       Map.put(metadata_map, path, get_video_metadata(path))
     end)
 
     # TODO - I don't actually have to calculate this, can use \
     # Map.take instead of Map.drop but I'd like to have this diff available anyway for logging.
     deleted_files = Map.keys(existing_metadata) -- media_files
+
     # TODO - Use proper logging level
     #IO.puts("Deleted files")
     #IO.puts(FormatTools.format_pretty(deleted_files))

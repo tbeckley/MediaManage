@@ -36,7 +36,11 @@ defmodule Background.JobQueue do
   end
 
   def update_progress(job_id, progress) do
-    GenServer.cast(__MODULE__, { :progress, job_id, progress})
+    GenServer.cast(__MODULE__, { :progress, job_id, progress })
+  end
+
+  def register_cleanup(job_id, cleanup_fn) do
+    GenServer.cast(__MODULE__, { :set_cleanup, job_id, cleanup_fn })
   end
 
   def mark_complete(job_id, result) do
@@ -102,6 +106,12 @@ defmodule Background.JobQueue do
   end
 
   @impl true
+  def handle_cast({ :set_cleanup, job_id, cleanup_fn }, state) do
+    new_state = put_in(state, [:running, job_id, :cleanup_fn], cleanup_fn)
+    { :noreply, new_state }
+  end
+
+  @impl true
   def handle_cast({ :progress, job_id, progress}, state) do
     { :noreply, put_in(state, [:running, job_id, :progress], progress) }
   end
@@ -145,6 +155,11 @@ defmodule Background.JobQueue do
         { :noreply, state }
       pid when is_pid(pid) ->
         Process.exit(pid, :kill)
+
+        with cleanup when is_function(cleanup) <- get_in(state, [:running, job_id, :cleanup_fn]) do
+          cleanup.()
+        end
+
         new_running = Map.delete(state.running, job_id)
         { :noreply, %{ state | running: new_running } }
     end
@@ -152,7 +167,11 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast(:kill_all, state) do
-    state.running |> Map.values() |> Enum.map(&(Map.get(&1, :pid))) |> Enum.each(&(Process.exit(&1, :kill)))
+    running_tasks = state.running |> Map.values()
+    running_tasks |> Enum.map(&(Map.get(&1, :pid))) |> Enum.each(&(Process.exit(&1, :kill)))
+    running_tasks |> Enum.map(&(Map.get(&1, :cleanup_fn)))
+      |> Enum.filter(fn a -> is_function(a) end) |> Enum.each(fn a -> a.() end)
+
     { :noreply, %{ state | running: %{} }}
   end
 
@@ -163,20 +182,14 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_info(:run_next, state) do
-    %{ queued: queued, running: running, failed: failed } = state
+    %{ queued: queued, running: running } = state
     job_id = Map.keys(queued) |> Enum.min()
     { job_data, others } = Map.pop(queued, job_id)
 
-    start_result = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
+    # I just realized this is infallable, and if it fails we wanna end the whole process anyway
+    { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
-    intermediate_state = case start_result do
-      { :ok, pid } ->
-        new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
-        %{ state | running: Map.put(running, job_id, new_job_data) }
-      { :error, reason } ->
-        new_job_data = Map.merge(job_data, %{ start_ts: System.system_time(:second), error: reason })
-        %{ state | failed: Map.put(failed, job_id, new_job_data) }
-    end
+    new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
 
     # Requeue if there's still jobs to do
     # TODO - Add limit so I'm not running 124812471 jobs at once
@@ -184,6 +197,10 @@ defmodule Background.JobQueue do
       send(self(), :run_next)
     end
 
-    { :noreply, %{ intermediate_state | queued: others } }
+    { :noreply, %{
+      state |
+      queued: others,
+      running: Map.put(running, job_id, new_job_data) }
+    }
   end
 end

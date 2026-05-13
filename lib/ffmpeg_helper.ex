@@ -1,3 +1,5 @@
+use FFmpex.Options
+
 defmodule FFmpegHelper do
   def time_from_chunk({ msg_type, msg }) do
     # Chunks come in broken, so the out_time_ms line can be split
@@ -25,5 +27,20 @@ defmodule FFmpegHelper do
     ]
 
     String.contains?(err_msg_lower, "error") and String.contains?(err_msg_lower, known_error_patterns)
+  end
+
+  # TODO - Add more
+  def ffmpeg_opts_from_encoding(encoding_settings) do
+    case encoding_settings do
+      { :hevc, preset, crf } ->  [
+        option_vcodec("libx265"),
+        option_acodec("copy"),
+        option_vtag("hvc1"),
+        option_f("mp4"),
+        option_preset(preset),
+        option_crf(crf),
+        option_tune("fastdecode") ]
+      _ -> raise "Unknown encoding options! #{inspect(encoding_settings)}"
+    end
   end
 end
