@@ -1,4 +1,5 @@
 defmodule Background.JobQueue do
+  require Logger
   use GenServer
 
   # Public API
@@ -64,7 +65,7 @@ defmodule Background.JobQueue do
       queued: %{},
       running: %{},
       failed: %{},
-      max_concurrency: :infinity
+      max_concurrency: Application.get_env(:mediamanage, :max_concurrency)
     }
 
     {:ok, default_state }
@@ -102,6 +103,7 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast(:clear_failed, state) do
+    Logger.info("Clearing failed jobs!")
     { :noreply, %{ state | failed: %{} } }
   end
 
@@ -118,6 +120,7 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :complete, job_id, { :ok, data }}, state) do
+    Logger.info("Job #{job_id} completed!")
     job_spec = get_in(state, [:running, job_id])
 
     case Map.get(job_spec, :type) do
@@ -133,6 +136,7 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :complete, job_id, { :error, error_data }}, state) do
+    Logger.info("Job #{job_id} failed!")
     job_spec = get_in(state, [:running, job_id])
 
     failed_spec = Map.delete(job_spec, :pid) |> Map.merge(%{
@@ -150,8 +154,7 @@ defmodule Background.JobQueue do
   def handle_cast({ :kill, job_id }, state) do
     case get_in(state, [:running, job_id, :pid]) do
       nil ->
-        IO.puts("Job #{job_id} is not running!")
-        IO.inspect(Map.get(state.running, 0))
+        Logger.warning("Job #{job_id} is not running!")
         { :noreply, state }
       pid when is_pid(pid) ->
         Process.exit(pid, :kill)
@@ -187,6 +190,7 @@ defmodule Background.JobQueue do
     { job_data, others } = Map.pop(queued, job_id)
 
     # I just realized this is infallable, and if it fails we wanna end the whole process anyway
+    Logger.info("Rnning job #{job_id}")
     { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
     new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })

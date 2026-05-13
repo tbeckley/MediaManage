@@ -33,7 +33,7 @@ all_files = data |> Enum.map(fn f ->
       modified_time: modified_time,
       broken: broken
     }
-    _ -> raise inspect(f, [{:limit, :infinity}])
+    _ -> FormatTools.format_pretty(f)
   end
 end)
 

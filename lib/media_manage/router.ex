@@ -1,4 +1,5 @@
 defmodule MediaManage.Router do
+  require Logger
   use Plug.Router
 
   plug Plug.Parsers, parsers: [:urlencoded, :multipart]
@@ -80,16 +81,13 @@ defmodule MediaManage.Router do
   patch "/recode" do
     %{ params: %{ "path" => path }} = conn
 
-    # TODO - Get these from frontend somehow, or state at least
-    # TODO - Change
-    encode_opts = Video.default_encode_opts()
+    encode_settings = Application.get_env(:media_manage, :encode_settings)
 
-    Background.JobQueue.queue_recode_file(path, encode_opts)
+    Background.JobQueue.queue_recode_file(path, encode_settings)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")
   end
 
   delete "/job" do
-    # TODO - Make sure it's not a subpath or superpath of an existing path...
     %{ params: %{ "job_id" => id_str, "job_state" => job_state }} = conn
 
     job_id = String.to_integer(id_str)
@@ -98,7 +96,7 @@ defmodule MediaManage.Router do
       "running" -> Background.JobQueue.kill(job_id)
       "queued" -> Background.JobQueue.cancel_queued(job_id)
       "failed" -> Background.JobQueue.clear_failed(job_id)
-      other -> IO.puts("Unknown job status? #{inspect(other)}")
+      other -> Logger.warning("Unknown job status? #{inspect(other)}")
     end
 
     conn |> put_resp_header("location", "/") |> send_resp(302, "")

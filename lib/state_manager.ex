@@ -1,4 +1,6 @@
 defmodule StateManager do
+  require Logger
+
   use GenServer
 
   def start_link(cache_path) do
@@ -64,12 +66,11 @@ defmodule StateManager do
     # We need to find out which base path this belongs to before we can update it
     base_path = Map.keys(state) |> Enum.find(&String.contains?(old_path, &1))
 
-    [{ _new_path, _new_metadata }] = Map.to_list(new_map)
-    #IO.puts("New metadata for #{new_path} (base path: #{base_path})")
-    #IO.inspect(new_metadata)
+    [{ new_path, _new_metadata }] = Map.to_list(new_map)
+    Logger.debug("New metadata received for #{new_path} (base path: #{base_path})")
 
     if is_nil(base_path) do
-      IO.puts("Error! Couldn't find a base path for #{old_path}")
+      Logger.error("Couldn't find a base path for #{old_path}")
       { :noreply, state }
     else
       new_state = update_in(state, [base_path, :media_files], fn old_media ->
@@ -87,7 +88,7 @@ defmodule StateManager do
   # Debug state
   @impl true
   def handle_call({ :debug_state, file_path }, _from, state) do
-    File.write!(file_path, inspect(state, [{ :pretty, :true}, { :limit, :infinity }]))
+    File.write!(file_path, FormatTools.format_pretty(state))
     { :noreply, state }
   end
 end

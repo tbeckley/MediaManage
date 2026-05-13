@@ -199,7 +199,6 @@
             </td>
         </tr>
         <% end %>
-        <!-- TODO: Failed jobs with diagnostics -->
     </table>
 
     <h2>Watched Paths</h2>
