@@ -100,12 +100,7 @@ defmodule Background.JobQueue do
       Logger.info("Job already exists, not adding.")
       { :noreply, state }
     else
-      # Every time I see this I get confused
-      # If the pre-update state is empty and the post-update
-      # state is not empty, only then must we start the cycle
-      if queued == %{} do
-        send(self(), :run_next)
-      end
+      send(self(), :run_next)
 
       { :noreply, %{
         put_in(state, [:queued, next_job_id], new_job) |
@@ -159,6 +154,7 @@ defmodule Background.JobQueue do
       other_key -> IO.inspect("Finished uncontrolled job #{inspect(other_key)}")
     end
 
+    send(self(), :run_next)
     { :noreply, %{ state | running: Map.delete(state.running, job_id)}}
   end
 
@@ -175,12 +171,12 @@ defmodule Background.JobQueue do
     new_failed = Map.put_new(state.failed, job_id, failed_spec)
     new_running = Map.delete(state.running, job_id)
 
+    send(self(), :run_next)
     { :noreply, %{ state | failed: new_failed, running: new_running } }
   end
 
   @impl true
   def handle_cast({ :kill, job_id }, state) do
-
     case get_in(state, [:running, job_id, :pid]) do
       nil ->
         Logger.warning("Job #{job_id} is not running!")
@@ -195,6 +191,8 @@ defmodule Background.JobQueue do
         end
 
         new_running = Map.delete(state.running, job_id)
+        # We've created an opening that won't otherwise be filled
+        send(self(), :run_next)
         { :noreply, %{ state | running: new_running } }
     end
   end
@@ -202,6 +200,9 @@ defmodule Background.JobQueue do
   @impl true
   def handle_cast(:kill_all, state) do
     graceful_kill_all_tasks(state.running)
+
+    # Start up new items if things are queued
+    send(self(), :run_next)
     { :noreply, %{ state | running: %{} }}
   end
 
@@ -213,26 +214,30 @@ defmodule Background.JobQueue do
   @impl true
   def handle_info(:run_next, state) do
     %{ queued: queued, running: running } = state
-    job_id = Map.keys(queued) |> Enum.min()
-    { job_data, others } = Map.pop(queued, job_id)
+    max_concurrency = Application.get_env(:mediamanage, :max_concurrency)
 
-    # I just realized this is infallable, and if it fails we wanna end the whole process anyway
-    Logger.info("Running job #{job_id}")
-    { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
+    if map_size(running) < max_concurrency and map_size(queued) > 0 do
+      job_id = Map.keys(queued) |> Enum.min()
+      { job_data, others } = Map.pop(queued, job_id)
 
-    new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
+      # I just realized this is infallable, and if it fails we wanna end the whole process anyway
+      Logger.info("Running job #{job_id}")
+      { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
-    # Requeue if there's still jobs to do
-    # TODO - Add limit so I'm not running 124812471 jobs at once
-    if others != %{} do
+      new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
+
+      # I could check this I guess but I'm worried about all sorts of race condition corner cases
+      # So I'm just going to send it recursive-style (it's idiomatic!)
       send(self(), :run_next)
-    end
 
-    { :noreply, %{
-      state |
-      queued: others,
-      running: Map.put(running, job_id, new_job_data) }
-    }
+      { :noreply, %{
+        state |
+        queued: others,
+        running: Map.put(running, job_id, new_job_data) }
+      }
+    else
+      { :noreply, state }
+    end
   end
 
   @impl true

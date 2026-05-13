@@ -6,11 +6,11 @@ defmodule MediaManage.Application do
 
     http_port = Application.get_env(:mediamanage, :http_port)
     listen_ip = Application.get_env(:mediamanage, :listen_ip)
+    cache_path = Application.get_env(:mediamanage, :cache_path)
 
     children = [
       { Bandit, plug: MediaManage.Router, scheme: :http, port: http_port, ip: listen_ip },
-      # TODO - Cache path from environment variable
-      { StateManager, "out/cache" },
+      { StateManager, cache_path },
       { Background.JobSupervisor, nil },
       { Background.JobQueue, nil }
     ]

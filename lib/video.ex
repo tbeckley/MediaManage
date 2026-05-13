@@ -157,7 +157,8 @@ defmodule Video do
     file_modified = File.stat!(path, [{:time, :posix}]) |> Map.fetch!(:mtime)
     metadata_modified = get_in(existing_metadata, [path, :modified_time])
 
-    Logger.debug("Testing file #{path}. File modified: #{file_modified}, metadata time: #{inspect(metadata_modified)}")
+    # Too much logging, even for me
+    # Logger.debug("Testing file #{path}. File modified: #{file_modified}, metadata time: #{inspect(metadata_modified)}")
 
     case metadata_modified do
       nil -> :true

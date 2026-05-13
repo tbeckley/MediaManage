@@ -22,11 +22,8 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 MediaManage-*.tar
 
-# Ignore temporarily generated cache files
+# Ignore temporarily generated cache files, log files, debug files
 out/
-
-# Ignore VSCode settings
-.vscode
 
 # Personal iEx debugging settings
 .iex.exs

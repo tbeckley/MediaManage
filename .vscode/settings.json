@@ -1,0 +1,9 @@
+{
+    "elixirLS.suggestSpecs": false,
+    "search.exclude": {
+        "**/*.code-search": true,
+        ".git": true,
+        "deps": true
+    },
+    "elixirLS.mixEnv": "dev",
+}
