@@ -7,7 +7,7 @@ defmodule FormatTools do
 
   def format_duration(nil) do "" end
 
-  def format_duration(seconds_decimal) do
+  def format_duration(seconds_decimal) when is_number(seconds_decimal) do
     seconds = trunc(seconds_decimal)
 
     h = div(seconds, 3600)
@@ -23,7 +23,7 @@ defmodule FormatTools do
 
   def format_codec(nil) do "" end
 
-  def format_codec(codec) do
+  def format_codec(codec) when is_bitstring(codec) do
     case codec do
       "Alliance for Open Media AV1" -> "AV1"
       c -> c |> String.split() |> hd
@@ -32,7 +32,7 @@ defmodule FormatTools do
 
   def format_bps(nil) do "" end
 
-  def format_bps(bps) do
+  def format_bps(bps) when is_number(bps) do
     "#{trunc(bps/1000)}kb/s"
   end
 
@@ -40,10 +40,21 @@ defmodule FormatTools do
     inspect(val, [{ :limit, :infinity }, { :pretty, :true }])
   end
 
+  def pretty_atom(val) when is_atom(val) do
+    Atom.to_string(val) |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+  end
+
   def describe_job(spec) do
     case spec.type do
       # TODO - Include smarter encoding type checking
-      :recode -> "Re-encode #{spec.path} to #{Map.get(@encodings, elem(spec.encode_opts, 0))}"
+      :recode ->
+        new_spec = if is_tuple(spec.encode_opts) do
+          Map.get(@encodings, elem(spec.encode_opts, 0))
+        else
+          spec.encode_opts
+        end
+
+        "Re-encode #{spec.path} to #{inspect(new_spec)}"
       :metadata -> "Update metadata on #{spec.path}"
       type -> "Do #{inspect(type)} (#{inspect(spec)}) on #{spec.path}"
     end

@@ -81,7 +81,7 @@ defmodule MediaManage.Router do
   patch "/recode" do
     %{ params: %{ "path" => path }} = conn
 
-    encode_settings = Application.get_env(:media_manage, :encode_settings)
+    encode_settings = Application.get_env(:mediamanage, :encode_settings)
 
     Background.JobQueue.queue_recode_file(path, encode_settings)
     conn |> put_resp_header("location", "/") |> send_resp(302, "")

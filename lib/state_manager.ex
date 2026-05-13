@@ -32,10 +32,22 @@ defmodule StateManager do
     GenServer.cast(__MODULE__, {:debug_state, path})
   end
 
+  # Private Helpers
+  defp schedule_persist() do
+    write_interval = Application.get_env(:mediamanage, :cache_interval)
+    Process.send_after(self(), :persist, write_interval)
+  end
+
+  defp persist_to_disk(state) do
+    cache_path = Application.get_env(:mediamanage, :cache_path)
+    Cache.save_cache(state, cache_path)
+  end
+
   # Callbacks
   @impl true
-  def init(cache_path \\ "") do
+  def init(cache_path) do
     media_cache = Cache.load_cache(cache_path)
+    schedule_persist()
     { :ok, media_cache }
   end
 
@@ -90,5 +102,20 @@ defmodule StateManager do
   def handle_call({ :debug_state, file_path }, _from, state) do
     File.write!(file_path, FormatTools.format_pretty(state))
     { :noreply, state }
+  end
+
+  # Persist state to disk
+  @impl true
+  def handle_info(:persist, state) do
+    persist_to_disk(state)
+    { :noreply, state }
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    IO.puts("Terminate")
+    Logger.warning("Terminating")
+    File.write("out/terminate", "hello")
+    persist_to_disk(state)
   end
 end

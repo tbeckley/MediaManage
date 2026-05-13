@@ -188,7 +188,7 @@
         <%= for job <- job_data.failed do %>
         <tr class="table-error">
             <td> <%= job.description %></td>
-            <td> Failed: <%= job.error_msg %> </td>
+            <td style="white-space: pre-line">Failed: <%= job.error_msg %> </td>
             <td>
                 <form action="/job" method="post">
                     <input type="hidden" name="_method" value="delete">

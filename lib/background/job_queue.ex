@@ -56,6 +56,20 @@ defmodule Background.JobQueue do
     GenServer.cast(__MODULE__, :kill_all)
   end
 
+  # Private Helpers
+
+  defp graceful_kill_all_tasks(running) do
+    running |> Map.to_list() |> Enum.each(fn { job_id, job_data } ->
+      Logger.info("Killing job #{job_id}")
+      Map.get(job_data, :pid) |> Process.exit(:kill)
+
+      if cleanup_fn = Map.get(job_data, :cleanup_fn) do
+        Logger.debug("Running cleanup function!")
+        cleanup_fn.()
+      end
+    end)
+  end
+
   # Callbacks
 
   @impl true
@@ -152,14 +166,17 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :kill, job_id }, state) do
+
     case get_in(state, [:running, job_id, :pid]) do
       nil ->
         Logger.warning("Job #{job_id} is not running!")
         { :noreply, state }
       pid when is_pid(pid) ->
+        Logger.info("Killing job #{job_id}")
         Process.exit(pid, :kill)
 
         with cleanup when is_function(cleanup) <- get_in(state, [:running, job_id, :cleanup_fn]) do
+          Logger.debug("Running cleanup function")
           cleanup.()
         end
 
@@ -170,11 +187,7 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast(:kill_all, state) do
-    running_tasks = state.running |> Map.values()
-    running_tasks |> Enum.map(&(Map.get(&1, :pid))) |> Enum.each(&(Process.exit(&1, :kill)))
-    running_tasks |> Enum.map(&(Map.get(&1, :cleanup_fn)))
-      |> Enum.filter(fn a -> is_function(a) end) |> Enum.each(fn a -> a.() end)
-
+    graceful_kill_all_tasks(state.running)
     { :noreply, %{ state | running: %{} }}
   end
 
@@ -190,7 +203,7 @@ defmodule Background.JobQueue do
     { job_data, others } = Map.pop(queued, job_id)
 
     # I just realized this is infallable, and if it fails we wanna end the whole process anyway
-    Logger.info("Rnning job #{job_id}")
+    Logger.info("Running job #{job_id}")
     { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
     new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })
@@ -206,5 +219,10 @@ defmodule Background.JobQueue do
       queued: others,
       running: Map.put(running, job_id, new_job_data) }
     }
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    graceful_kill_all_tasks(state.running)
   end
 end

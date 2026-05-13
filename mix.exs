@@ -13,8 +13,8 @@ defmodule MediaManage.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: { MediaManage.Application, [] }
+      mod: { MediaManage.Application, [] },
+      extra_applications: [:logger]
     ]
   end
 

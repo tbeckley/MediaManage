@@ -4,25 +4,46 @@ defmodule MediaManage.Application do
   def start(_type, _args) do
     log_config()
 
+    http_port = Application.get_env(:mediamanage, :http_port)
+    listen_ip = Application.get_env(:mediamanage, :listen_ip)
+
     children = [
-      { Bandit, plug: MediaManage.Router, scheme: :http, port: 4000 },
+      { Bandit, plug: MediaManage.Router, scheme: :http, port: http_port, ip: listen_ip },
       # TODO - Cache path from environment variable
       { StateManager, "out/cache" },
       { Background.JobSupervisor, nil },
       { Background.JobQueue, nil }
     ]
 
-    Supervisor.start_link(children, strategy: :one_for_one)
+    # Shouldn't take 5s to write out state and clean everything up...
+    Supervisor.start_link(children, [
+      { :strategy, :one_for_one} ,
+      { :shutdown, 5_000 },
+      { :name, MediaManage.Supervisor }
+    ])
   end
 
-  defp log_config do
+  def stop() do
+    Application.stop(:mediamanage)
+  end
+
+  def log_config() do
     require Logger
 
-    Logger.info("=== Loaded Configuration ===
-    Max Concurrency: #{inspect(Application.get_env(:mediamanage, :max_concurrency))}
-    Encoding Preferences: #{inspect(Application.get_env(:mediamanage, :encode_settings))}
-    Cache Path: #{inspect(Application.get_env(:mediamanage, :cache_path))}
-    Log Level: #{inspect(Application.get_env(:logger, :level))}
-    ================================")
+    env_info = Application.get_all_env(:mediamanage)
+    log_level = Application.get_env(:logger, :level)
+
+    # Special case log level for now
+    config_vals = env_info |> Enum.map(fn { key, val } ->
+      "#{FormatTools.pretty_atom(key)}: #{inspect(val)}" end) |> Enum.join("\n")
+
+    # Yes, I had to do this. Sad.
+    Logger.info(String.trim("""
+    =======MediaManage Config======
+    #{config_vals}
+    Log Level: #{log_level}
+    ===============================
+    """))
+
   end
 end
