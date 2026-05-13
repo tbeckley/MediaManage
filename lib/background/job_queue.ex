@@ -87,17 +87,31 @@ defmodule Background.JobQueue do
 
   @impl true
   def handle_cast({ :enqueue, new_job }, state) do
-    %{ next_job_id: next_job_id } = state
-    new_state = %{
-      put_in(state, [:queued, next_job_id], new_job) |
-      next_job_id: next_job_id + 1
-    }
+    %{ queued: queued, running: running, next_job_id: next_job_id } = state
 
-    if state.queued == %{} do
-      send(self(), :run_next)
+    all_jobs = Map.values(running) ++  Map.values(queued)
+
+    # We can't match on the map ittself, sadly. This is a corner case with match?/2
+    # https://hexdocs.pm/elixir/Kernel.html#match?/2-values-vs-patterns
+
+    %{ type: type, path: path } = new_job
+
+    if Enum.any?(all_jobs, &match?(%{ type: ^type, path: ^path }, &1)) do
+      Logger.info("Job already exists, not adding.")
+      { :noreply, state }
+    else
+      # Every time I see this I get confused
+      # If the pre-update state is empty and the post-update
+      # state is not empty, only then must we start the cycle
+      if queued == %{} do
+        send(self(), :run_next)
+      end
+
+      { :noreply, %{
+        put_in(state, [:queued, next_job_id], new_job) |
+        next_job_id: next_job_id + 1
+      }}
     end
-
-    { :noreply, new_state }
   end
 
   def handle_cast({ :cancel, job_id }, state) do
