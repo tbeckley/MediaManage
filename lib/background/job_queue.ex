@@ -161,7 +161,16 @@ defmodule Background.JobQueue do
   @impl true
   def handle_cast({ :complete, job_id, { :error, error_data }}, state) do
     Logger.info("Job #{job_id} failed!")
-    job_spec = get_in(state, [:running, job_id])
+    { job_spec, other_running } = Map.pop(state.running, job_id)
+
+    case error_data do
+      { type, _, _ } when type in  [:exception, :erlang] ->
+        if cleanup_fn = Map.get(job_spec, :cleanup_fn) do\
+          Logger.info("Running cleanup function for job #{job_id} on apparent crash")
+          cleanup_fn.()
+        end
+      _ -> :ok
+    end
 
     failed_spec = Map.delete(job_spec, :pid) |> Map.merge(%{
       fail_ts: System.system_time(:second),
@@ -169,10 +178,9 @@ defmodule Background.JobQueue do
     })
 
     new_failed = Map.put_new(state.failed, job_id, failed_spec)
-    new_running = Map.delete(state.running, job_id)
 
     send(self(), :run_next)
-    { :noreply, %{ state | failed: new_failed, running: new_running } }
+    { :noreply, %{ state | failed: new_failed, running: other_running } }
   end
 
   @impl true
