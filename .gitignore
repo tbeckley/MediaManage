@@ -25,5 +25,8 @@ MediaManage-*.tar
 # Ignore temporarily generated cache files, log files, debug files
 out/
 
+# Ignore media files - these should be downloaded by the init script
+test/assets/video
+
 # Personal iEx debugging settings
 .iex.exs

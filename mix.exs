@@ -12,11 +12,11 @@ defmodule MediaManage.MixProject do
   end
 
   def application do
-    [
-      mod: { MediaManage.Application, [] },
-      extra_applications: [:logger]
-    ]
+    get_apps(Mix.env())
   end
+
+  defp get_apps(:test), do: [ extra_applications: [] ]
+  defp get_apps(_), do: [ mod: { MediaManage.Application, [] }, extra_applications: [:logger] ]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
