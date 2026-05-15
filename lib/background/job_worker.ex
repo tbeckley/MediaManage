@@ -13,7 +13,6 @@ defmodule Background.JobWorker do
       cleanup: &(register_cleanup(job_id, &1))
     }
 
-    # TODO - Probably should run a cleanup here...
     result = try do
        case job_data.type do
         :recode ->

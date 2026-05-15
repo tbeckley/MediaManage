@@ -17,7 +17,7 @@ defmodule Video do
     !File.dir?(video_path) and String.ends_with?(Path.extname(video_path), @file_extension)
   end
 
-  defp broken?(video_path) do
+  def broken?(video_path) do
     ffmpeg_cmd = FFmpex.new_command() |> FFmpex.add_input_file(video_path)
       |> FFmpex.to_stdout() |> FFmpex.add_file_option(option_f("null"))
       |> FFmpex.add_global_option(option_xerror()) |> FFmpex.add_global_option(option_v("error"))
@@ -59,9 +59,7 @@ defmodule Video do
     end
   end
 
-  # I don't feel great about this. I _ALMOST_ feel that the new path should come from higher up the chain
-  # So we're not just blindly trusting that the recode_file() function works properly
-  defp get_recode_paths(input_path, codec, workdir \\ :nil) do
+  defp get_recode_paths(input_path, codec, workdir) do
     { encode_supersuffix, output_extension } = case codec do
       :hevc -> { ".x265", ".mp4" }
       :mp4 -> { ".x264", ".mp4" }
@@ -83,8 +81,9 @@ defmodule Video do
     target_codec = elem(encoding_options, 0)
     %{ duration: duration } = Video.get_video_metadata(video_path, [:assume_ok])
 
-    # TODO - Allow different temp directory for encoding into and copying
-    { work_path, out_path } = get_recode_paths(video_path, target_codec)
+    # TODO - Perhaps pass this to the function, try to avoid calling get_env from the standalone functions
+    workdir = Application.get_env(:mediamanage, :workdir)
+    { work_path, out_path } = get_recode_paths(video_path, target_codec, workdir)
 
     cleanup_fn = fn -> File.rm(work_path) end
     progress_fn = with c when is_function(c) <- update_progress do
@@ -182,6 +181,11 @@ defmodule Video do
   end
 
   defp path_metadata_guarded(path, existing_metadata, job_functions) do
+    get_metadata_opts = case Application.get_env(:mediamanage, :assume_ok) do
+      nil -> []
+      _ -> [:assume_ok]
+    end
+
     Logger.info("Updating metadata for #{path}")
 
     # Find out if we have a progress callback function available
@@ -199,7 +203,7 @@ defmodule Video do
         pct_done = trunc(idx / required_metadata_updates * 100)
         progress_callback.(pct_done)
       end
-      Map.put(metadata_map, path, get_video_metadata(path))
+      Map.put(metadata_map, path, get_video_metadata(path, get_metadata_opts))
     end)
 
     # TODO - I don't actually have to calculate this, can use \

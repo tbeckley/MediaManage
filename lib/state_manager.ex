@@ -39,15 +39,22 @@ defmodule StateManager do
   end
 
   defp persist_to_disk(state) do
+    # TODO - I should just store this and fetch it once
+    # Or better yet hold it from init()
     cache_path = Application.get_env(:mediamanage, :cache_path)
     Cache.save_cache(state, cache_path)
   end
 
   # Callbacks
   @impl true
-  def init(cache_path) do
-    media_cache = Cache.load_cache(cache_path)
-    schedule_persist()
+  def init(maybe_cache_path) do
+    media_cache = case maybe_cache_path do
+      nil -> %{}
+      cache_path ->
+          schedule_persist()
+          Cache.load_cache(cache_path)
+    end
+
     { :ok, media_cache }
   end
 
@@ -94,7 +101,7 @@ defmodule StateManager do
   # Get media
   @impl true
   def handle_call(:get_media, _from, state) do
-    { :reply,  state, state }
+    { :reply, state, state }
   end
 
   # Debug state

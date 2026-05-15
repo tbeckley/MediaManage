@@ -17,10 +17,25 @@ if encode_opts_raw = System.get_env("ENCODING") do
     encode_opts: encode_opts
 end
 
-if cachepath = System.get_env("CACHEPATH") do
-  # TODO - Check if this directory is even valid...
-  config :mediamanage,
-    cache_path: cachepath
+if cachepath_raw = System.get_env("CACHEPATH") do
+  # Trim to handle weird corner cases with environment variables on Linux I seem to be having
+  if String.trim(cachepath_raw) != "" do
+    full_path = Path.expand(cachepath_raw)
+
+    # Just becuase you CAN have a cache named " " doesn't mean you SHOULD.
+    if full_path |> Path.dirname() |> File.dir?() do
+      config :mediamanage,
+        cache_path: cachepath_raw
+    else
+      Logger.warning("CACHEPATH #{cachepath_raw} seems to be an invalid directory, falling back on default.")
+    end
+
+  else
+    Logger.info("File caching disabled")
+    config :mediamanage,
+      cache_path: nil
+  end
+
 end
 
 if listen_ip_raw = System.get_env("IP") do
@@ -42,6 +57,21 @@ if port_raw = System.get_env("PORT") do
   config :mediamanage,
     http_port: String.to_integer(port_raw)
 end
+
+# Any truthy value
+if System.get_env("ASSUME_OK") do
+  config :mediamanage,
+    assume_ok: :true
+end
+
+# Any truthy value
+if workdir_raw = System.get_env("WORKDIR") do
+  workdir_full = Path.expand(workdir_raw)
+  IO.puts("Workdir: #{workdir_full}")
+  config :mediamanage,
+    workdir: workdir_full
+end
+
 
 if log_level_raw = System.get_env("LOGLEVEL") do
   # I have no idea if this is necessary but I heard never to do String.to_atom() so...
