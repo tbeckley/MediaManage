@@ -9,7 +9,7 @@ end
 if encode_opts_raw = System.get_env("ENCODING") do
   encode_opts = case encode_opts_raw |> String.downcase() |> String.split(",") do
     [ "hevc", preset, crf ] -> { :hevc, preset, crf }
-    [ "hevc" ] -> { :hevc, "medium", 24}
+    [ "hevc" ] -> { :hevc, "medium", 24 }
     _ -> raise "Unknown encoding options: #{inspect(encode_opts_raw)}"
   end
 
@@ -64,7 +64,6 @@ if System.get_env("ASSUME_OK") do
     assume_ok: :true
 end
 
-# Any truthy value
 if workdir_raw = System.get_env("WORKDIR") do
   workdir_full = Path.expand(workdir_raw)
   IO.puts("Workdir: #{workdir_full}")
@@ -80,7 +79,7 @@ if log_level_raw = System.get_env("LOGLEVEL") do
     "warning" -> :warning
     "info" -> :info
     "debug" -> :debug
-    "trace" -> :trace
+    #"trace" -> :trace
     _ -> raise "Unknown log level #{log_level_raw}, using :info"
   end
 

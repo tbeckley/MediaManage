@@ -5,7 +5,6 @@ config :mediamanage,
   max_concurrency: :infinity,
   cache_path: "/tmp/cache",
   cache_interval: 3_600,
-  listen_ip: :any,
   http_port: 4000
 
 config :logger,
