@@ -5,119 +5,126 @@
     <meta name="color-scheme" content="light dark">
     <meta name="viewport" content="width=device-width">
 
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
+        viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20'
+        fill='%23111'/%3E%3Cpolygon points='30,30 70,50 30,70' fill='%23ff9800'/%3E%3Ccircle
+        cx='70'  cy='70' r='18' stroke='white' stroke-width='6' fill='none'/%3E%3Cline x1='82'
+        y1='82' x2='95' y2='95' stroke='white' stroke-width='6'/%3E%3C/svg%3E" />
+
+
     <style>
-    body {
-        font-family: sans-serif;
-        font-size: 14px;
-    }
+        body {
+            font-family: sans-serif;
+            font-size: 14px;
+        }
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: auto;   /* dynamic column sizing */
-        padding-right: 12px;  /* keeps action buttons off screen edge */
-    }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;   /* dynamic column sizing */
+            padding-right: 12px;  /* keeps action buttons off screen edge */
+        }
 
-    th, td {
-        padding: 8px 12px;
-        overflow: hidden;     /* required for truncation */
-    }
+        th, td {
+            padding: 8px 12px;
+            overflow: hidden;     /* required for truncation */
+        }
 
-    /* Zebra striping */
-    tr:nth-child(even):not(.table-error):not(.table-running):not(.table-queued) {
-        background: color-mix(in srgb, Canvas 90%, CanvasText);
-    }
+        /* Zebra striping */
+        tr:nth-child(even):not(.table-error):not(.table-running):not(.table-queued) {
+            background: color-mix(in srgb, Canvas 90%, CanvasText);
+        }
 
-    tr:hover:not(.table-error):not(.table-running):not(.table-queued) {
-        background: color-mix(in srgb, Canvas 80%, CanvasText);
-    }
+        tr:hover:not(.table-error):not(.table-running):not(.table-queued) {
+            background: color-mix(in srgb, Canvas 80%, CanvasText);
+        }
 
-    .col-main {
-        width: 60%;
-    }
+        .col-main {
+            width: 60%;
+        }
 
-    .col-auto {
-        width: auto;
-    }
+        .col-auto {
+            width: auto;
+        }
 
-    .col-half {
-        width: 50%;
-    }
+        .col-half {
+            width: 50%;
+        }
 
-    .col-action {
-        width: 48px;
-    }
+        .col-action {
+            width: 48px;
+        }
 
-    table tr td:last-child {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+        table tr td:last-child {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-    /* Truncation */
-    td:first-child {
-        max-width: 0;
-        padding-right: 80px;
-    }
+        /* Truncation */
+        td:first-child {
+            max-width: 0;
+            padding-right: 80px;
+        }
 
-    .truncate {
-        overflow: hidden;
-    }
+        .truncate {
+            overflow: hidden;
+        }
 
-    .truncate span {
-        display: block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+        .truncate span {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-    /* Error row */
-    .table-error {
-        background: color-mix(in srgb, red 25%, Canvas);
-        color: color-mix(in srgb, CanvasText 90%, red);
-    }
+        /* Error row */
+        .table-error {
+            background: color-mix(in srgb, red 25%, Canvas);
+            color: color-mix(in srgb, CanvasText 90%, red);
+        }
 
-    .table-error:hover {
-        background: color-mix(in srgb, red 35%, Canvas);
-    }
+        .table-error:hover {
+            background: color-mix(in srgb, red 35%, Canvas);
+        }
 
-    .table-running {
-        background: color-mix(in srgb, limegreen 25%, Canvas);
-        color: color-mix(in srgb, CanvasText 90%, limegreen);
-    }
+        .table-running {
+            background: color-mix(in srgb, limegreen 25%, Canvas);
+            color: color-mix(in srgb, CanvasText 90%, limegreen);
+        }
 
-    .table-running:hover {
-        background: color-mix(in srgb, limegreen 35%, Canvas);
-    }
+        .table-running:hover {
+            background: color-mix(in srgb, limegreen 35%, Canvas);
+        }
 
-    .table-queued {
-        background: color-mix(in srgb, gold 25%, Canvas);
-        color: color-mix(in srgb, CanvasText 90%, goldenrod);
-    }
+        .table-queued {
+            background: color-mix(in srgb, gold 25%, Canvas);
+            color: color-mix(in srgb, CanvasText 90%, goldenrod);
+        }
 
-    .table-queued:hover {
-        background: color-mix(in srgb, gold 35%, Canvas);
-    }
+        .table-queued:hover {
+            background: color-mix(in srgb, gold 35%, Canvas);
+        }
 
-    /* Icons */
-    .icon {
-        width: 32px;
-        height: 32px;
-        fill: color-mix(in srgb, CanvasText 80%, Canvas);
-        cursor: pointer;
-    }
+        /* Icons */
+        .icon {
+            width: 32px;
+            height: 32px;
+            fill: color-mix(in srgb, CanvasText 80%, Canvas);
+            cursor: pointer;
+        }
 
-    .icon:hover {
-        fill: color-mix(in srgb, CanvasText 100%, Canvas);
-    }
+        .icon:hover {
+            fill: color-mix(in srgb, CanvasText 100%, Canvas);
+        }
 
-    .larger-text {
-        font-size: 18px;
-    }
+        .larger-text {
+            font-size: 18px;
+        }
 
-    .smaller-text {
-        font-size: 12px;
-    }
+        .smaller-text {
+            font-size: 12px;
+        }
     </style>
 
     <svg style="display:none;">

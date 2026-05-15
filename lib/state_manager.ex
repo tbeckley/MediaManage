@@ -1,4 +1,5 @@
 defmodule StateManager do
+  @type path() :: String.t()
   require Logger
 
   use GenServer
@@ -21,7 +22,7 @@ defmodule StateManager do
   end
 
   def add_watch_path(path) do
-    GenServer.cast(__MODULE__, { :add_path, path})
+    GenServer.cast(__MODULE__, { :add_path, path })
   end
 
   def delete_watch_path(path) do
@@ -45,6 +46,15 @@ defmodule StateManager do
     Cache.save_cache(state, cache_path)
   end
 
+  # TODO - Add tests to lock in behaviour
+  @spec valid_new_path?(list(path()), path()) :: boolean()
+  def valid_new_path?(existing_paths, new_path) do
+    not Enum.any?(existing_paths, fn base ->
+      String.starts_with?(base, new_path) or
+      String.starts_with?(new_path, base)
+    end)
+  end
+
   # Callbacks
   @impl true
   def init(maybe_cache_path) do
@@ -60,7 +70,19 @@ defmodule StateManager do
 
   @impl true
   def handle_cast({ :add_path, path }, state) do
-    { :noreply, Map.put_new(state, path, %{ last_updated: nil, media_files: %{} }) }
+    new_path = path |> String.trim() |> Path.expand() |>
+      String.trim_trailing("/") |> Kernel.<>("/")
+
+    cond do
+      not File.dir?(new_path) ->
+        Logger.warning("Tried to add non-directory watchpath #{path}")
+        { :noreply, state }
+      not valid_new_path?(Map.keys(state), new_path) ->
+        Logger.warning("Tried to add child/parent watchpath #{path}")
+        { :noreply, state }
+      true ->
+        { :noreply, Map.put_new(state, path, %{ last_updated: nil, media_files: %{} }) }
+    end
   end
 
   @impl true
