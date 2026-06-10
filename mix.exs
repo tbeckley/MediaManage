@@ -8,6 +8,20 @@ defmodule MediaManage.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      releases: releases(),
+      package: [
+        files: ~w(lib templates config mix.exs README.md)
+      ]
+    ]
+  end
+
+  def releases do
+    [
+      mediamanage: [
+        include_executables_for: [:unix],
+        # Overlays doesn't work here, they're copied to project root.
+        steps: [:assemble, &copy_templates/1]
+      ]
     ]
   end
 
@@ -26,5 +40,10 @@ defmodule MediaManage.MixProject do
       { :bandit, "~> 1.8" },
       { :dialyxir, "~> 1.4", only: [:dev], runtime: false}
     ]
+  end
+
+  defp copy_templates(release) do
+    File.cp_r!("templates", Path.join(release.path, "templates"))
+    release
   end
 end

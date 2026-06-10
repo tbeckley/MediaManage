@@ -8,6 +8,7 @@ config :mediamanage,
   http_port: 4000
 
 config :logger,
-  level: :info
+  level: :info,
+  format: "$time $metadata[$level] $levelpad$message\n"
 
 import_config "env/#{config_env()}.exs"

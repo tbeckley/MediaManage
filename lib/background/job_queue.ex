@@ -228,8 +228,6 @@ defmodule Background.JobQueue do
       job_id = Map.keys(queued) |> Enum.min()
       { job_data, others } = Map.pop(queued, job_id)
 
-      # I just realized this is infallable, and if it fails we wanna end the whole process anyway
-      Logger.info("Running job #{job_id}")
       { :ok, pid } = DynamicSupervisor.start_child(Background.JobSupervisor, { Background.JobWorker, { job_id, job_data } })
 
       new_job_data = Map.merge(job_data, %{ progress: 0, pid: pid, start_ts: System.system_time(:second) })

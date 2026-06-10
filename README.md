@@ -39,14 +39,17 @@ All options are passed via environment variables to enable use in docker. Develo
 
 ** - This speeds up metadata scans by multiple orders of magnitude but lead to ffmpeg exploding later for no reason.
 
+## Building (docker and otherwise)
+To build the docker container, run `docker build -t mediamanage .`. This produces an image "mediamanage", which can be run as usual with `docker run -d mediamanage`, passing in any environment variables as required. Port selection can be done at the docker level or by passing in the PORT env var.
+
+To make a release suitable for running outside of docker, use `MIX_ENV=prod mix compile; MIX_ENV=prod mix release`. [This doesn't work on Fedora](https://elixirforum.com/t/getting-ssl-error-when-running-mix-release/73692/3), so hasn't been tested. You can also use the docker build container with `docker build --target build -t mm_build .`, then run it with `docker run -v ./out:/out mm_build`, which should copy an built tar.gz file to the `out` directory.
 
 ## Ongoing to-do
 
 1. Support more encoding outputs (mostly AV1)
 2. Start with type hints on some key functions, to enable compiler warnings
-3. Figure out how to do a single exectuable build, and generate dockerfile for the same
-4. Handle graceful termination - Figure out why terminate() isn't running
-5. Track dirty flag so cache is only written out if necessary
+3. Handle graceful termination - Figure out why terminate() isn't running
+4. Track dirty flag so cache is only written out if necessary
 999. Anything else tagged `#TODO` in the code!
 
 ## Development
