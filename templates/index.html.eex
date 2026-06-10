@@ -169,7 +169,7 @@
             <td> <%= job.description %></td>
             <td> Running (<%= job.duration  %>), <%= job.progress %>% </td>
             <td>
-                <form action="/job" method="post">
+                <form action="job" method="post">
                     <input type="hidden" name="_method" value="delete">
                     <input type="hidden" name="job_state" value="running">
                     <input type="hidden" name="job_id" value="<%= job.id %>">
@@ -183,7 +183,7 @@
             <td> <%= job.description %></td>
             <td> Queued </td>
             <td>
-                <form action="/job" method="post">
+                <form action="job" method="post">
                     <input type="hidden" name="_method" value="delete">
                     <input type="hidden" name="job_state" value="queued">
                     <input type="hidden" name="job_id" value="<%= job.id %>">
@@ -197,7 +197,7 @@
             <td> <%= job.description %></td>
             <td style="white-space: pre-line">Failed: <%= job.error_msg %> </td>
             <td>
-                <form action="/job" method="post">
+                <form action="job" method="post">
                     <input type="hidden" name="_method" value="delete">
                     <input type="hidden" name="job_state" value="failed">
                     <input type="hidden" name="job_id" value="<%= job.id %>">
@@ -223,7 +223,7 @@
             <td>Last updated: <%= modified_ago %></td>
             <td>
                 <%= if able_refresh do %>
-                <form action="/watchpath" method="post">
+                <form action="watchpath" method="post">
                     <input type="hidden" name="_method" value="patch">
                     <input type="hidden" name="path" value="<%= path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-refresh"/></svg></button>
@@ -231,7 +231,7 @@
                 <% end %>
             </td>
             <td>
-                <form action="/watchpath" method="post">
+                <form action="watchpath" method="post">
                     <input type="hidden" name="_method" value="delete">
                     <input type="hidden" name="path" value="<%= path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-trash"/></svg></button>
@@ -240,7 +240,7 @@
         </tr>
         <% end %>
         <tr>
-            <form action="/watchpath" method="post">
+            <form action="watchpath" method="post">
                 <td style="height: 90%"> <input type="text" name="path" autocomplete="off"
                     autocorrect="off" autocapitalize="off" spellcheck="false"
                     placeholder="/mnt/...." style="width: 100%; height: 100%;"> </td>
@@ -276,7 +276,7 @@
 
             <td>
                 <%= if not metadata.broken do %>
-                <form action="/recode" method="post">
+                <form action="recode" method="post">
                     <input type="hidden" name="_method" value="patch">
                     <input type="hidden" name="path" value="<%= file_path %>">
                     <button type="submit"><svg class="icon"><use href="#icon-forward"/></svg></button>
